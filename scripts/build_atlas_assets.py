@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Build local Atlas assets for Vietflexmap/atlas.
 
-Downloads the 172 public page images exposed by the source HTML5 viewer,
-validates every page, writes pages/manifest.json, and creates
-Atlas_Vietnam_1996.pdf.
-
-This script is intended to run in GitHub Actions. The website itself reads
-local pages/*.jpg by default so the public reader does not depend on hotlinking
-bandovn.vn at runtime.
+Downloads 172 page images from the source viewer, validates every page, writes
+pages/manifest.json and creates Atlas_Vietnam_1996.pdf. The published HTML5
+Flipbook reads local pages/*.jpg, so normal readers do not hotlink the source.
 """
 
 from __future__ import annotations
@@ -23,20 +19,29 @@ from pathlib import Path
 
 import img2pdf
 import requests
+import urllib3
 from PIL import Image, ImageOps
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 TOTAL_PAGES = 172
 SOURCE_VIEWER = "https://www.bandovn.vn/onlinescan/atlasvietnam/"
-SOURCE_PATTERN = SOURCE_VIEWER + "files/mobile/{page}.jpg"
+SOURCE_CANDIDATES = [
+    "https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
+    "https://bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
+    "http://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
+]
 ROOT = Path(__file__).resolve().parents[1]
 PAGES_DIR = ROOT / "pages"
 MANIFEST = PAGES_DIR / "manifest.json"
 PDF_PATH = ROOT / "Atlas_Vietnam_1996.pdf"
-WORKERS = 6
-TIMEOUT = 45
-RETRIES = 5
+WORKERS = 10
+TIMEOUT = 20
+RETRIES = 3
 MIN_BYTES = 8_000
-MAX_PDF_BYTES = 92 * 1024 * 1024  # safe margin below GitHub's 100 MB file limit
+MAX_PDF_BYTES = 92 * 1024 * 1024
+ACTIVE_PATTERN = SOURCE_CANDIDATES[0]
+ACTIVE_VERIFY = True
 
 HEADERS = {
     "User-Agent": (
@@ -55,7 +60,7 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def validate_jpeg(data: bytes, page: int) -> tuple[int, int]:
+def validate_image(data: bytes, page: int) -> tuple[int, int]:
     if len(data) < MIN_BYTES:
         raise RuntimeError(f"page {page}: file too small ({len(data)} bytes)")
     try:
@@ -70,14 +75,42 @@ def validate_jpeg(data: bytes, page: int) -> tuple[int, int]:
     return width, height
 
 
+def probe_source() -> tuple[str, bool]:
+    """Find one reachable source URL before spawning 172 downloads."""
+    print("Probing Atlas image source...")
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    attempts: list[tuple[str, bool]] = []
+    for pattern in SOURCE_CANDIDATES:
+        attempts.append((pattern, True))
+        if pattern.startswith("https://"):
+            attempts.append((pattern, False))
+
+    errors: list[str] = []
+    for pattern, verify in attempts:
+        url = pattern.format(page=1)
+        try:
+            response = session.get(url, timeout=10, allow_redirects=True, verify=verify)
+            response.raise_for_status()
+            validate_image(response.content, 1)
+            print(f"Source OK: {url} (TLS verify={verify})")
+            return pattern, verify
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{url} verify={verify}: {exc}")
+            print(f"Source probe failed: {url} verify={verify}: {exc}")
+
+    raise RuntimeError("No reachable Atlas image source.\n" + "\n".join(errors))
+
+
 def download_page(page: int) -> dict:
-    url = SOURCE_PATTERN.format(page=page)
+    url = ACTIVE_PATTERN.format(page=page)
     target = PAGES_DIR / f"{page}.jpg"
 
     if target.exists() and target.stat().st_size >= MIN_BYTES:
         try:
             data = target.read_bytes()
-            width, height = validate_jpeg(data, page)
+            width, height = validate_image(data, page)
             return {
                 "page": page,
                 "file": target.name,
@@ -97,10 +130,15 @@ def download_page(page: int) -> dict:
 
     for attempt in range(1, RETRIES + 1):
         try:
-            response = session.get(url, timeout=TIMEOUT, allow_redirects=True)
+            response = session.get(
+                url,
+                timeout=TIMEOUT,
+                allow_redirects=True,
+                verify=ACTIVE_VERIFY,
+            )
             response.raise_for_status()
             data = response.content
-            width, height = validate_jpeg(data, page)
+            width, height = validate_image(data, page)
             target.write_bytes(data)
             return {
                 "page": page,
@@ -114,7 +152,7 @@ def download_page(page: int) -> dict:
             }
         except Exception as exc:  # noqa: BLE001
             error = exc
-            time.sleep(min(8, attempt * 1.5))
+            time.sleep(attempt)
 
     return {
         "page": page,
@@ -127,10 +165,12 @@ def download_page(page: int) -> dict:
 
 
 def download_all() -> list[dict]:
+    global ACTIVE_PATTERN, ACTIVE_VERIFY
     PAGES_DIR.mkdir(parents=True, exist_ok=True)
+    ACTIVE_PATTERN, ACTIVE_VERIFY = probe_source()
     results: list[dict] = []
 
-    print(f"Downloading {TOTAL_PAGES} Atlas pages from {SOURCE_VIEWER}")
+    print(f"Downloading {TOTAL_PAGES} Atlas pages with {WORKERS} workers")
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as executor:
         futures = {executor.submit(download_page, page): page for page in range(1, TOTAL_PAGES + 1)}
         for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
@@ -139,14 +179,15 @@ def download_all() -> list[dict]:
             marker = "OK" if result["status"] != "failed" else "ERR"
             print(
                 f"[{done:03d}/{TOTAL_PAGES}] {marker} page {result['page']:03d} "
-                f"{result.get('bytes', 0):>9} bytes"
+                f"{result.get('bytes', 0):>9} bytes",
+                flush=True,
             )
 
     results.sort(key=lambda item: item["page"])
     failed = [item for item in results if item["status"] == "failed"]
     if failed:
-        pages = ", ".join(str(item["page"]) for item in failed)
-        raise RuntimeError(f"Failed pages: {pages}")
+        details = "; ".join(f"{item['page']}: {item.get('error', '')}" for item in failed)
+        raise RuntimeError("Failed pages: " + details)
     return results
 
 
@@ -157,6 +198,7 @@ def write_manifest(results: list[dict]) -> None:
                 "title": "Atlas Việt Nam 1996",
                 "credit": "Nguồn: Vietflexmap số hóa",
                 "sourceViewer": SOURCE_VIEWER,
+                "resolvedImagePattern": ACTIVE_PATTERN,
                 "totalPages": TOTAL_PAGES,
                 "generatedUtc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "pages": results,
@@ -212,15 +254,8 @@ def build_pdf() -> None:
         return
 
     temp_pdf.unlink(missing_ok=True)
-    print("PDF is too large for a normal GitHub file; creating a high-quality optimized PDF.")
-
-    attempts = [
-        (88, 2600),
-        (82, 2300),
-        (76, 2100),
-        (70, 1900),
-        (64, 1700),
-    ]
+    print("PDF exceeds safe GitHub size; making a high-quality optimized PDF.")
+    attempts = [(88, 2600), (82, 2300), (76, 2100), (70, 1900), (64, 1700)]
     with tempfile.TemporaryDirectory(prefix="atlas-pdf-") as temp:
         root = Path(temp)
         for quality, max_side in attempts:
@@ -228,7 +263,7 @@ def build_pdf() -> None:
             optimized = optimize_pages_for_pdf(files, quality, max_side, work)
             make_pdf_from_jpegs(optimized, temp_pdf)
             size = temp_pdf.stat().st_size
-            print(f"Optimized PDF q={quality}, max={max_side}: {size / 1024 / 1024:.1f} MB")
+            print(f"Optimized q={quality}, max={max_side}: {size / 1024 / 1024:.1f} MB")
             if size <= MAX_PDF_BYTES:
                 temp_pdf.replace(PDF_PATH)
                 return
