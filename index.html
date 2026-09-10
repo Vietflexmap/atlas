@@ -2,127 +2,100 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes">
-  <meta name="theme-color" content="#171612">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12100d">
   <meta name="color-scheme" content="dark">
-  <meta name="referrer" content="no-referrer">
-  <meta name="description" content="Atlas Việt Nam 1996 — sách số dạng HTML5 Flipbook. Nguồn: Vietflexmap số hóa.">
+  <meta name="description" content="Atlas Việt Nam 1996 - Flipbook HTML5 172 trang. Nguồn: Vietflexmap số hóa.">
   <title>Atlas Việt Nam 1996 | Vietflexmap số hóa</title>
-  <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-shell" id="appShell">
-    <header class="topbar" id="topbar">
-      <button class="round-btn menu-btn" id="toggleThumbsBtn" type="button" aria-label="Mở danh sách trang" aria-expanded="false" aria-controls="sidebar">☰</button>
+  <div class="app" id="app">
+    <header class="topbar">
+      <button class="icon-btn" id="tocBtn" type="button" aria-label="Mở danh sách trang" aria-expanded="false">☰</button>
 
-      <div class="brand" aria-label="Thông tin sách">
-        <div class="brand-mark" aria-hidden="true">VN</div>
-        <div class="brand-copy">
+      <div class="brand">
+        <div class="brand-badge" aria-hidden="true">VN</div>
+        <div class="brand-text">
           <h1>Atlas Việt Nam 1996</h1>
           <p>Nguồn: <strong>Vietflexmap số hóa</strong></p>
         </div>
       </div>
 
       <div class="top-actions">
-        <a class="round-btn" id="pdfDownload" href="Atlas_Vietnam_1996.pdf" download="Atlas_Vietnam_1996.pdf" aria-label="Tải Atlas PDF" title="Tải Atlas PDF" style="text-decoration:none" hidden>↓</a>
-        <button class="round-btn" id="focusBtn" type="button" aria-label="Chế độ tập trung" title="Ẩn/hiện giao diện">◉</button>
-        <button class="round-btn" id="fullscreenBtn" type="button" aria-label="Toàn màn hình" title="Toàn màn hình">⛶</button>
+        <a class="icon-btn link-btn" id="downloadPdf" href="Atlas_Vietnam_1996.pdf" download="Atlas_Vietnam_1996.pdf" title="Tải PDF" aria-label="Tải PDF">↓</a>
+        <button class="icon-btn" id="focusBtn" type="button" title="Chế độ tập trung" aria-label="Chế độ tập trung">◉</button>
+        <button class="icon-btn" id="fullscreenBtn" type="button" title="Toàn màn hình" aria-label="Toàn màn hình">⛶</button>
       </div>
     </header>
 
-    <main class="reader-layout" id="readerLayout">
+    <main class="reader">
       <div class="drawer-scrim" id="drawerScrim" hidden></div>
 
-      <aside class="sidebar" id="sidebar" aria-label="Danh sách trang" aria-hidden="true">
-        <div class="sidebar-head">
+      <aside class="drawer" id="drawer" aria-hidden="true">
+        <div class="drawer-head">
           <div>
-            <span class="eyebrow">MỤC LỤC ẢNH</span>
-            <strong>172 trang Atlas</strong>
+            <span class="eyebrow">ATLAS VIỆT NAM</span>
+            <strong id="drawerTitle">172 trang</strong>
           </div>
-          <button class="round-btn small" id="closeThumbsBtn" type="button" aria-label="Đóng danh sách trang">×</button>
+          <button class="icon-btn small" id="closeDrawerBtn" type="button" aria-label="Đóng">×</button>
         </div>
-        <div class="thumb-grid" id="thumbGrid" role="list"></div>
+        <div class="thumb-grid" id="thumbGrid"></div>
       </aside>
 
-      <section class="reader-stage" id="readerStage" aria-label="Trình đọc Atlas">
-        <div class="stage-vignette" aria-hidden="true"></div>
+      <section class="stage" id="stage" aria-label="Trình đọc Atlas dạng sách lật">
+        <div class="ambient" aria-hidden="true"></div>
 
-        <div class="status-card" id="loadingState" role="status" aria-live="polite">
+        <div class="loading-card" id="loadingCard" role="status" aria-live="polite">
           <div class="spinner" aria-hidden="true"></div>
-          <strong>Đang mở Atlas…</strong>
-          <span>Đang nạp 172 trang số hóa từ Vietflexmap.</span>
+          <strong id="loadingTitle">Đang mở Atlas…</strong>
+          <span id="loadingText">Đang nạp PDF và chuẩn bị 172 trang.</span>
+          <div class="loading-progress"><i id="loadingBar"></i></div>
         </div>
 
-        <div class="book-wrap" id="bookWrap" hidden>
-          <div id="book" aria-label="Atlas Việt Nam dạng sách lật"></div>
+        <div class="book-shell" id="bookShell" hidden>
+          <div id="book" aria-label="Atlas Việt Nam 1996 - Flipbook HTML5"></div>
         </div>
 
-        <div class="fallback-reader" id="fallbackReader" hidden>
-          <img id="fallbackImage" referrerpolicy="no-referrer" alt="Trang Atlas Việt Nam">
-        </div>
+        <button class="edge edge-left" id="edgePrev" type="button" aria-label="Trang trước"><span>‹</span></button>
+        <button class="edge edge-right" id="edgeNext" type="button" aria-label="Trang sau"><span>›</span></button>
 
-        <button class="edge-nav edge-prev" id="edgePrev" type="button" aria-label="Trang trước" title="Trang trước"><span>‹</span></button>
-        <button class="edge-nav edge-next" id="edgeNext" type="button" aria-label="Trang sau" title="Trang sau"><span>›</span></button>
-
-        <div class="source-badge" aria-label="Nguồn dữ liệu">Nguồn: <strong>Vietflexmap số hóa</strong></div>
+        <div class="source-credit">Nguồn: <strong>Vietflexmap số hóa</strong></div>
       </section>
     </main>
 
-    <footer class="reader-controls" id="readerControls" aria-label="Điều khiển sách">
-      <div class="progress-row">
-        <span class="progress-page" id="progressPage">01</span>
-        <input id="pageRange" class="page-range" type="range" min="1" max="172" value="1" step="1" aria-label="Chọn trang">
-        <span class="progress-page muted" id="progressTotal">172</span>
+    <footer class="controls">
+      <div class="seek-row">
+        <span id="seekCurrent">001</span>
+        <input id="pageRange" type="range" min="1" max="172" value="1" step="1" aria-label="Chọn trang">
+        <span id="seekTotal">172</span>
       </div>
 
       <div class="toolbar">
-        <div class="toolbar-group desktop-only">
-          <button class="tool-btn" id="firstBtn" type="button" aria-label="Trang đầu" title="Trang đầu">⏮</button>
+        <button class="control-btn hide-mobile" id="firstBtn" type="button" title="Trang đầu" aria-label="Trang đầu">⏮</button>
+        <button class="control-btn primary" id="prevBtn" type="button" title="Trang trước" aria-label="Trang trước">‹</button>
+
+        <div class="page-box">
+          <span>Trang</span>
+          <input id="pageInput" type="number" min="1" max="172" value="1" inputmode="numeric" aria-label="Số trang">
+          <b>/ <span id="pageTotal">172</span></b>
         </div>
 
-        <div class="toolbar-group nav-group">
-          <button class="tool-btn primary" id="prevBtn" type="button" aria-label="Trang trước" title="Trang trước">‹</button>
+        <button class="control-btn primary" id="nextBtn" type="button" title="Trang sau" aria-label="Trang sau">›</button>
+        <button class="control-btn hide-mobile" id="lastBtn" type="button" title="Trang cuối" aria-label="Trang cuối">⏭</button>
 
-          <div class="page-control" aria-label="Trang hiện tại">
-            <span class="page-label">Trang</span>
-            <input id="pageInput" type="number" min="1" max="172" value="1" inputmode="numeric" aria-label="Nhập số trang">
-            <span class="page-total">/ <b id="pageTotal">172</b></span>
-          </div>
+        <span class="toolbar-sep hide-tablet" aria-hidden="true"></span>
 
-          <button class="tool-btn primary" id="nextBtn" type="button" aria-label="Trang sau" title="Trang sau">›</button>
-        </div>
-
-        <div class="toolbar-group desktop-only">
-          <button class="tool-btn" id="lastBtn" type="button" aria-label="Trang cuối" title="Trang cuối">⏭</button>
-        </div>
-
-        <div class="toolbar-separator desktop-only" aria-hidden="true"></div>
-
-        <div class="toolbar-group zoom-group desktop-only">
-          <button class="tool-btn" id="zoomOutBtn" type="button" aria-label="Thu nhỏ" title="Thu nhỏ">−</button>
-          <button class="zoom-value" id="resetZoomBtn" type="button" aria-label="Đặt lại tỷ lệ" title="Đặt lại tỷ lệ"><span id="zoomLabel">100%</span></button>
-          <button class="tool-btn" id="zoomInBtn" type="button" aria-label="Phóng to" title="Phóng to">+</button>
-        </div>
+        <button class="control-btn hide-tablet" id="zoomOutBtn" type="button" title="Thu nhỏ" aria-label="Thu nhỏ">−</button>
+        <button class="zoom-label hide-tablet" id="zoomResetBtn" type="button" title="100%"><span id="zoomValue">100%</span></button>
+        <button class="control-btn hide-tablet" id="zoomInBtn" type="button" title="Phóng to" aria-label="Phóng to">+</button>
       </div>
     </footer>
 
-    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
   </div>
 
-  <script>
-    // Production ưu tiên dữ liệu local. Khi pages/ chưa được số hóa xong,
-    // app.js sẽ tự quay về nguồn trực tuyến. no-referrer giúp tránh một số
-    // cấu hình chống hotlink dựa trên Referer tại nguồn cũ.
-    if (!new URLSearchParams(location.search).has('source')) {
-      history.replaceState(null, '', `${location.pathname}?source=local${location.hash || ''}`);
-    }
-
-    // Chỉ hiện nút PDF khi file PDF thực sự đã có trong repository.
-    fetch('Atlas_Vietnam_1996.pdf', { method: 'HEAD', cache: 'no-store' })
-      .then(r => { if (r.ok) document.getElementById('pdfDownload').hidden = false; })
-      .catch(() => {});
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
   <script src="app.js"></script>
 </body>
