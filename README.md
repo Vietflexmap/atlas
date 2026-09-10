@@ -13,6 +13,7 @@ Trình đọc Atlas dạng sách lật chạy thuần HTML/CSS/JavaScript và c�
 - URL nhớ trang hiện tại qua `#page=...` để chia sẻ thẳng một trang.
 - Fallback đọc ảnh đơn trang nếu thư viện Flipbook CDN không tải được.
 - Hai chế độ dữ liệu: ảnh nguồn trực tiếp và ảnh lưu local trong repository.
+- GitHub Actions tự deploy mỗi khi cập nhật nhánh `main`.
 
 ## Chạy ngay
 
@@ -80,15 +81,15 @@ Ví dụ:
 https://vietflexmap.github.io/atlas/?source=local#page=50
 ```
 
-## GitHub Pages
+## Bật GitHub Pages lần đầu
 
-Repository được thiết kế để deploy từ root của nhánh `main`:
+Workflow `.github/workflows/pages.yml` đã có sẵn. Chỉ cần cấu hình Pages một lần:
 
-1. Vào **Settings → Pages**.
-2. Chọn **Deploy from a branch**.
-3. Branch: `main`.
-4. Folder: `/ (root)`.
-5. Save.
+1. Vào **Settings → Pages** của repository.
+2. Trong **Build and deployment → Source**, chọn **GitHub Actions**.
+3. Mở tab **Actions** và chạy lại workflow **Deploy Atlas to GitHub Pages** nếu lần chạy đầu tiên xảy ra trước khi Pages được bật.
+
+Sau đó mỗi lần push lên `main` website sẽ tự deploy.
 
 Địa chỉ dự kiến:
 
@@ -104,6 +105,9 @@ atlas/
 ├── style.css
 ├── app.js
 ├── .nojekyll
+├── .github/
+│   └── workflows/
+│       └── pages.yml
 ├── scripts/
 │   └── download_pages.py
 └── pages/                 # tạo khi chạy downloader
