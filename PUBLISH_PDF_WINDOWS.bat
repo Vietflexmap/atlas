@@ -57,7 +57,7 @@ if errorlevel 1 goto :fail
 echo.
 echo ==============================================================
 echo HOAN TAT - FLIPBOOK 172 TRANG SE TU DEPLOY
-necho https://vietflexmap.github.io/atlas/
+echo https://vietflexmap.github.io/atlas/
 echo ==============================================================
 pause
 exit /b 0
