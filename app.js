@@ -2,6 +2,8 @@
   'use strict';
 
   const PDF_URL = './Atlas_Vietnam_1996.pdf';
+  const REMOTE_BASE = 'https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile';
+  const SOURCE_VIEWER = 'https://www.bandovn.vn/onlinescan/atlasvietnam/';
   const EXPECTED_PAGES = 172;
   const STORAGE_KEY = 'vietflexmap-atlas-page';
   const PAGE_W = 508;
@@ -19,14 +21,15 @@
   };
 
   let pdf = null;
+  let mode = 'boot'; // pdf | remote | single-pdf | single-remote
   let totalPages = EXPECTED_PAGES;
   let pageFlip = null;
   let currentPage = 1;
   let zoom = 1;
   let drawerOpen = false;
   let toastTimer = 0;
-  let singleMode = false;
   let singleCanvas = null;
+  let singleImage = null;
   const pageElements = new Map();
   const renderJobs = new Map();
   const renderedPages = new Set();
@@ -35,8 +38,24 @@
 
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
   const pad = (n) => String(n).padStart(3, '0');
+  const remoteUrl = (n) => `${REMOTE_BASE}/${n}.jpg`;
 
-  function showToast(message, ms = 2200) {
+  function injectRuntimeStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .page.remote-page{background:#eee7d7;overflow:hidden;position:relative}
+      .page.remote-page>img,.single-remote-image{width:100%;height:100%;display:block;object-fit:contain;background:#eee7d7}
+      .thumb>img{width:100%;height:100%;display:block;object-fit:cover;background:#d9d2c3}
+      .recovery-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:7px}
+      .recovery-btn{border:1px solid rgba(210,173,107,.55);border-radius:10px;background:rgba(210,173,107,.12);color:#f4f0e7;padding:9px 13px;cursor:pointer;font-weight:700;font-size:12px;text-decoration:none}
+      .recovery-btn.secondary{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.05);font-weight:600}
+      .source-mode-pill{position:absolute;right:14px;bottom:12px;z-index:15;padding:4px 8px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(10,9,8,.52);color:rgba(255,255,255,.48);font-size:9px;pointer-events:none}
+      @media(max-width:560px){.recovery-actions{display:grid;width:100%}.recovery-btn{text-align:center}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function showToast(message, ms = 2500) {
     clearTimeout(toastTimer);
     el.toast.textContent = message;
     el.toast.hidden = false;
@@ -48,15 +67,14 @@
     if (text) el.loadingText.textContent = text;
   }
 
-  function showFatal(title, message) {
+  function setLoading(title, text, percent = 0) {
     el.loadingCard.hidden = false;
     el.loadingTitle.textContent = title;
-    el.loadingText.textContent = message;
-    el.loadingBar.style.width = '0%';
+    el.loadingText.textContent = text;
+    setProgress(percent);
     const spinner = el.loadingCard.querySelector('.spinner');
-    if (spinner) spinner.style.display = 'none';
-    el.bookShell.hidden = true;
-    el.download.hidden = true;
+    if (spinner) spinner.style.display = '';
+    el.loadingCard.querySelector('.recovery-actions')?.remove();
   }
 
   function initialPage() {
@@ -77,10 +95,10 @@
     const pct = totalPages > 1 ? ((currentPage - 1) / (totalPages - 1)) * 100 : 0;
     el.range.style.background = `linear-gradient(90deg,var(--gold) 0%,var(--gold) ${pct}%,rgba(255,255,255,.12) ${pct}%,rgba(255,255,255,.12) 100%)`;
 
-    const first = currentPage === 1;
-    const last = currentPage === totalPages;
-    [el.first, el.prev, el.edgePrev].forEach((b) => { b.disabled = first; });
-    [el.last, el.next, el.edgeNext].forEach((b) => { b.disabled = last; });
+    const atFirst = currentPage <= 1;
+    const atLast = currentPage >= totalPages;
+    [el.first, el.prev, el.edgePrev].forEach((b) => { if (b) b.disabled = atFirst; });
+    [el.last, el.next, el.edgeNext].forEach((b) => { if (b) b.disabled = atLast; });
 
     const active = el.thumbGrid.querySelector('.thumb.active');
     if (active) active.classList.remove('active');
@@ -106,7 +124,22 @@
     el.drawerTitle.textContent = `${totalPages} trang`;
   }
 
-  function createPageElement(pageNumber) {
+  function destroyBook() {
+    try { pageFlip?.destroy?.(); } catch (_) {}
+    pageFlip = null;
+    thumbObserver?.disconnect();
+    thumbObserver = null;
+    pageElements.clear();
+    renderJobs.clear();
+    renderedPages.clear();
+    thumbJobs.clear();
+    el.book.replaceChildren();
+    el.thumbGrid.replaceChildren();
+    singleCanvas = null;
+    singleImage = null;
+  }
+
+  function createPdfPageElement(pageNumber) {
     const page = document.createElement('div');
     page.className = 'page';
     page.dataset.page = String(pageNumber);
@@ -119,62 +152,55 @@
     const canvas = document.createElement('canvas');
     canvas.className = 'page-canvas';
     canvas.setAttribute('aria-label', `Atlas Việt Nam - trang ${pageNumber}`);
-
     page.append(loader, canvas);
     pageElements.set(pageNumber, { root: page, canvas });
     return page;
   }
 
-  async function renderPage(pageNumber, priority = false) {
+  async function renderPdfPage(pageNumber, priority = false) {
     pageNumber = clamp(pageNumber, 1, totalPages);
-    if (renderedPages.has(pageNumber)) return;
+    if (!pdf || renderedPages.has(pageNumber)) return;
     if (renderJobs.has(pageNumber)) return renderJobs.get(pageNumber);
-
     const entry = pageElements.get(pageNumber);
-    if (!entry || !pdf) return;
+    if (!entry) return;
 
     const job = (async () => {
       try {
         const pdfPage = await pdf.getPage(pageNumber);
         const base = pdfPage.getViewport({ scale: 1 });
         const fit = Math.min(PAGE_W / base.width, PAGE_H / base.height);
-        const dpr = Math.min(window.devicePixelRatio || 1, priority ? 2 : 1.65);
+        const dpr = Math.min(window.devicePixelRatio || 1, priority ? 2 : 1.6);
         const viewport = pdfPage.getViewport({ scale: fit * dpr });
-
         entry.canvas.width = Math.max(1, Math.floor(viewport.width));
         entry.canvas.height = Math.max(1, Math.floor(viewport.height));
         entry.canvas.style.width = `${Math.round(base.width * fit)}px`;
         entry.canvas.style.height = `${Math.round(base.height * fit)}px`;
-
         const ctx = entry.canvas.getContext('2d', { alpha: false });
-        ctx.save();
         ctx.fillStyle = '#f1eadb';
         ctx.fillRect(0, 0, entry.canvas.width, entry.canvas.height);
-        ctx.restore();
-
         await pdfPage.render({ canvasContext: ctx, viewport }).promise;
         entry.root.classList.add('rendered');
         renderedPages.add(pageNumber);
       } catch (err) {
-        console.error(`Render page ${pageNumber}`, err);
+        console.error(`Render PDF page ${pageNumber}`, err);
         const loader = entry.root.querySelector('.page-loader');
         if (loader) loader.textContent = `Không tải được trang ${pageNumber}`;
       } finally {
         renderJobs.delete(pageNumber);
       }
     })();
-
     renderJobs.set(pageNumber, job);
     return job;
   }
 
   function renderAround(pageNumber) {
-    const pages = [pageNumber - 2, pageNumber - 1, pageNumber, pageNumber + 1, pageNumber + 2, pageNumber + 3]
-      .filter((n) => n >= 1 && n <= totalPages);
-    pages.forEach((n, index) => renderPage(n, index < 4));
+    if (!pdf) return;
+    [pageNumber - 2, pageNumber - 1, pageNumber, pageNumber + 1, pageNumber + 2, pageNumber + 3]
+      .filter((n) => n >= 1 && n <= totalPages)
+      .forEach((n, i) => renderPdfPage(n, i < 4));
   }
 
-  async function renderThumb(pageNumber, canvas) {
+  async function renderPdfThumb(pageNumber, canvas) {
     if (!pdf || canvas.dataset.rendered === '1') return;
     if (thumbJobs.has(pageNumber)) return thumbJobs.get(pageNumber);
     const job = (async () => {
@@ -187,10 +213,13 @@
         const viewport = p.getViewport({ scale: fit });
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
-        await p.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport }).promise;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.fillStyle = '#eee7d7';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await p.render({ canvasContext: ctx, viewport }).promise;
         canvas.dataset.rendered = '1';
       } catch (err) {
-        console.warn('thumb', pageNumber, err);
+        console.warn('thumbnail', pageNumber, err);
       } finally {
         thumbJobs.delete(pageNumber);
       }
@@ -199,7 +228,7 @@
     return job;
   }
 
-  function buildThumbs() {
+  function buildPdfThumbs() {
     const frag = document.createDocumentFragment();
     for (let n = 1; n <= totalPages; n++) {
       const btn = document.createElement('button');
@@ -207,7 +236,6 @@
       btn.className = 'thumb';
       btn.dataset.page = String(n);
       btn.setAttribute('aria-label', `Mở trang ${n}`);
-
       const canvas = document.createElement('canvas');
       canvas.dataset.page = String(n);
       const badge = document.createElement('em');
@@ -217,70 +245,83 @@
       frag.appendChild(btn);
     }
     el.thumbGrid.replaceChildren(frag);
-
-    thumbObserver?.disconnect();
     thumbObserver = new IntersectionObserver((entries) => {
       for (const item of entries) {
         if (!item.isIntersecting) continue;
-        const canvas = item.target;
-        renderThumb(Number(canvas.dataset.page), canvas);
-        thumbObserver.unobserve(canvas);
+        renderPdfThumb(Number(item.target.dataset.page), item.target);
+        thumbObserver.unobserve(item.target);
       }
     }, { root: el.thumbGrid, rootMargin: '220px 0px' });
     el.thumbGrid.querySelectorAll('canvas').forEach((canvas) => thumbObserver.observe(canvas));
   }
 
-  function buildPages() {
+  function buildPdfPages() {
     const frag = document.createDocumentFragment();
-    for (let n = 1; n <= totalPages; n++) frag.appendChild(createPageElement(n));
+    for (let n = 1; n <= totalPages; n++) frag.appendChild(createPdfPageElement(n));
     el.book.replaceChildren(frag);
   }
 
-  function createSingleFallback() {
-    singleMode = true;
-    pageFlip = null;
-    el.book.replaceChildren();
-    const page = createPageElement(1);
-    page.classList.add('single-page');
-    singleCanvas = page.querySelector('canvas');
-    el.book.append(page);
-  }
+  function createRemotePageElement(pageNumber) {
+    const page = document.createElement('div');
+    page.className = 'page remote-page';
+    page.dataset.page = String(pageNumber);
+    if (pageNumber === 1 || pageNumber === totalPages) page.dataset.density = 'hard';
 
-  async function renderSingle(pageNumber) {
-    if (!singleMode || !pdf) return;
-    const page = el.book.querySelector('.page');
-    const canvas = singleCanvas;
-    page.classList.remove('rendered');
-    const loader = page.querySelector('.page-loader');
+    const loader = document.createElement('div');
+    loader.className = 'page-loader';
     loader.textContent = `Trang ${pageNumber}`;
-    const p = await pdf.getPage(pageNumber);
-    const base = p.getViewport({ scale: 1 });
-    const fit = Math.min(PAGE_W / base.width, PAGE_H / base.height);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const viewport = p.getViewport({ scale: fit * dpr });
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    canvas.style.width = `${Math.round(base.width * fit)}px`;
-    canvas.style.height = `${Math.round(base.height * fit)}px`;
-    await p.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport }).promise;
-    page.classList.add('rendered');
+    const img = document.createElement('img');
+    img.alt = `Atlas Việt Nam - trang ${pageNumber}`;
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    img.loading = pageNumber <= 6 ? 'eager' : 'lazy';
+    img.src = remoteUrl(pageNumber);
+    img.addEventListener('load', () => page.classList.add('rendered'), { once: true });
+    img.addEventListener('error', () => { loader.textContent = `Không tải được trang ${pageNumber}`; }, { once: true });
+    page.append(loader, img);
+    return page;
   }
 
-  function initPageFlip(startPage) {
-    if (!window.St || typeof window.St.PageFlip !== 'function') {
-      createSingleFallback();
-      return renderSingle(startPage).then(() => showToast('Đang dùng chế độ đọc một trang.'));
-    }
+  function buildRemotePages() {
+    const frag = document.createDocumentFragment();
+    for (let n = 1; n <= totalPages; n++) frag.appendChild(createRemotePageElement(n));
+    el.book.replaceChildren(frag);
+  }
 
+  function buildRemoteThumbs() {
+    const frag = document.createDocumentFragment();
+    for (let n = 1; n <= totalPages; n++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'thumb';
+      btn.dataset.page = String(n);
+      btn.setAttribute('aria-label', `Mở trang ${n}`);
+      const img = document.createElement('img');
+      img.alt = `Trang ${n}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.src = remoteUrl(n);
+      const badge = document.createElement('em');
+      badge.textContent = String(n);
+      btn.append(img, badge);
+      btn.addEventListener('click', () => { goToPage(n); closeDrawer(); });
+      frag.appendChild(btn);
+    }
+    el.thumbGrid.replaceChildren(frag);
+  }
+
+  function createPageFlip(startPage) {
+    if (!window.St || typeof window.St.PageFlip !== 'function') return false;
     pageFlip = new window.St.PageFlip(el.book, {
       width: PAGE_W,
       height: PAGE_H,
       size: 'stretch',
-      minWidth: 260,
+      minWidth: 250,
       maxWidth: PAGE_W,
-      minHeight: 345,
+      minHeight: 332,
       maxHeight: PAGE_H,
-      maxShadowOpacity: 0.36,
+      maxShadowOpacity: 0.38,
       showCover: true,
       mobileScrollSupport: false,
       drawShadow: true,
@@ -291,38 +332,90 @@
       disableFlipByClick: false,
       startPage: startPage - 1
     });
-
     pageFlip.loadFromHTML(el.book.querySelectorAll('.page'));
     pageFlip.on('flip', (event) => {
       const page = clamp(Number(event.data) + 1, 1, totalPages);
       updateUI(page);
       renderAround(page);
     });
-    pageFlip.on('changeOrientation', () => renderAround(currentPage));
     pageFlip.on('changeState', (event) => {
       if (event.data === 'flipping') renderAround(currentPage + 1);
     });
-
     pageFlip.turnToPage(startPage - 1);
+    return true;
+  }
+
+  async function createSinglePdf(startPage) {
+    mode = 'single-pdf';
+    el.book.replaceChildren();
+    const page = document.createElement('div');
+    page.className = 'page single-page';
+    const loader = document.createElement('div');
+    loader.className = 'page-loader';
+    const canvas = document.createElement('canvas');
+    canvas.className = 'page-canvas';
+    page.append(loader, canvas);
+    el.book.append(page);
+    singleCanvas = canvas;
+    await renderSinglePdf(startPage);
+  }
+
+  async function renderSinglePdf(pageNumber) {
+    if (!pdf || !singleCanvas) return;
+    const p = await pdf.getPage(pageNumber);
+    const base = p.getViewport({ scale: 1 });
+    const fit = Math.min(PAGE_W / base.width, PAGE_H / base.height);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const viewport = p.getViewport({ scale: fit * dpr });
+    singleCanvas.width = Math.floor(viewport.width);
+    singleCanvas.height = Math.floor(viewport.height);
+    singleCanvas.style.width = `${Math.round(base.width * fit)}px`;
+    singleCanvas.style.height = `${Math.round(base.height * fit)}px`;
+    const ctx = singleCanvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#eee7d7';
+    ctx.fillRect(0, 0, singleCanvas.width, singleCanvas.height);
+    await p.render({ canvasContext: ctx, viewport }).promise;
+    el.book.querySelector('.page')?.classList.add('rendered');
+  }
+
+  function createSingleRemote(startPage) {
+    mode = 'single-remote';
+    el.book.replaceChildren();
+    const page = document.createElement('div');
+    page.className = 'page remote-page rendered';
+    const img = document.createElement('img');
+    img.className = 'single-remote-image';
+    img.referrerPolicy = 'no-referrer';
+    page.append(img);
+    el.book.append(page);
+    singleImage = img;
+    renderSingleRemote(startPage);
+  }
+
+  function renderSingleRemote(pageNumber) {
+    if (!singleImage) return;
+    singleImage.alt = `Atlas Việt Nam - trang ${pageNumber}`;
+    singleImage.src = remoteUrl(pageNumber);
   }
 
   function goToPage(page) {
     const target = clamp(Number(page) || 1, 1, totalPages);
     updateUI(target);
-    renderAround(target);
-    if (singleMode) return renderSingle(target);
+    if (mode === 'pdf') renderAround(target);
+    if (mode === 'single-pdf') return renderSinglePdf(target);
+    if (mode === 'single-remote') return renderSingleRemote(target);
     pageFlip?.turnToPage(target - 1);
   }
 
   function prevPage() {
     if (currentPage <= 1) return;
-    if (singleMode) return goToPage(currentPage - 1);
+    if (mode.startsWith('single')) return goToPage(currentPage - 1);
     pageFlip?.flipPrev();
   }
 
   function nextPage() {
     if (currentPage >= totalPages) return;
-    if (singleMode) return goToPage(currentPage + 1);
+    if (mode.startsWith('single')) return goToPage(currentPage + 1);
     pageFlip?.flipNext();
   }
 
@@ -338,8 +431,7 @@
     el.drawer.setAttribute('aria-hidden', 'false');
     el.toc.setAttribute('aria-expanded', 'true');
     el.scrim.hidden = false;
-    const active = el.thumbGrid.querySelector(`[data-page="${currentPage}"]`);
-    active?.scrollIntoView({ block: 'nearest' });
+    el.thumbGrid.querySelector(`[data-page="${currentPage}"]`)?.scrollIntoView({ block: 'nearest' });
   }
 
   function closeDrawer() {
@@ -380,39 +472,33 @@
     el.zoomReset.addEventListener('click', () => setZoom(1));
 
     el.input.addEventListener('change', () => goToPage(el.input.value));
-    el.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { goToPage(el.input.value); el.input.blur(); }
+    el.input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { goToPage(el.input.value); el.input.blur(); }
     });
     el.range.addEventListener('input', () => {
-      const page = clamp(Number(el.range.value), 1, totalPages);
-      el.seekCurrent.textContent = pad(page);
-      el.input.value = String(page);
+      const preview = clamp(Number(el.range.value), 1, totalPages);
+      el.seekCurrent.textContent = pad(preview);
+      el.input.value = String(preview);
     });
     el.range.addEventListener('change', () => goToPage(el.range.value));
 
-    document.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevPage(); }
-      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); nextPage(); }
-      if (e.key === 'Home') goToPage(1);
-      if (e.key === 'End') goToPage(totalPages);
-      if (e.key.toLowerCase() === 'f') toggleFullscreen();
-      if (e.key.toLowerCase() === 'm') toggleFocus();
-      if (e.key === '+' || e.key === '=') setZoom(zoom + 0.1);
-      if (e.key === '-') setZoom(zoom - 0.1);
-      if (e.key === '0') setZoom(1);
-      if (e.key === 'Escape') { if (drawerOpen) closeDrawer(); else toggleFocus(false); }
+    document.addEventListener('keydown', (event) => {
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); prevPage(); }
+      if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); nextPage(); }
+      if (event.key === 'Home') goToPage(1);
+      if (event.key === 'End') goToPage(totalPages);
+      if (event.key.toLowerCase() === 'f') toggleFullscreen();
+      if (event.key.toLowerCase() === 'm') toggleFocus();
+      if (event.key === '+' || event.key === '=') setZoom(zoom + 0.1);
+      if (event.key === '-') setZoom(zoom - 0.1);
+      if (event.key === '0') setZoom(1);
+      if (event.key === 'Escape' && drawerOpen) closeDrawer();
     });
 
-    el.stage.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      setZoom(zoom + (e.deltaY < 0 ? 0.1 : -0.1));
-    }, { passive: false });
-
     window.addEventListener('hashchange', () => {
-      const m = location.hash.match(/page=(\d+)/i);
-      if (m && Number(m[1]) !== currentPage) goToPage(Number(m[1]));
+      const match = location.hash.match(/page=(\d+)/i);
+      if (match && Number(match[1]) !== currentPage) goToPage(Number(match[1]));
     });
 
     document.addEventListener('fullscreenchange', () => {
@@ -420,44 +506,144 @@
     });
   }
 
-  async function boot() {
-    bindUI();
-    if (!window.pdfjsLib) return showFatal('Thiếu PDF.js', 'Không tải được thư viện PDF.js. Hãy kiểm tra kết nối Internet.');
+  function testRemoteImage(timeout = 7000) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.referrerPolicy = 'no-referrer';
+      const timer = setTimeout(() => { img.onload = img.onerror = null; resolve(false); }, timeout);
+      img.onload = () => { clearTimeout(timer); resolve(true); };
+      img.onerror = () => { clearTimeout(timer); resolve(false); };
+      img.src = remoteUrl(1);
+    });
+  }
 
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  async function loadPdfFromUrl() {
+    const task = window.pdfjsLib.getDocument({ url: PDF_URL, disableAutoFetch: false, disableStream: false });
+    task.onProgress = ({ loaded, total }) => {
+      if (!total) return setProgress(18, 'Đang nhận dữ liệu PDF…');
+      setProgress(Math.min(68, Math.round((loaded / total) * 68)), `Đang tải PDF… ${Math.round((loaded / total) * 100)}%`);
+    };
+    return task.promise;
+  }
+
+  async function loadPdfFromFile(file) {
+    setLoading('Đang mở PDF từ máy…', 'Kiểm tra cấu trúc Atlas và chuẩn bị Flipbook.', 12);
+    const buffer = await file.arrayBuffer();
+    const task = window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+    return task.promise;
+  }
+
+  async function startPdfMode(documentPdf, repositoryPdf = false) {
+    destroyBook();
+    pdf = documentPdf;
+    mode = 'pdf';
+    totalPages = pdf.numPages;
+    configureTotals();
+    if (totalPages !== EXPECTED_PAGES) showToast(`PDF có ${totalPages} trang; chuẩn Atlas này dự kiến ${EXPECTED_PAGES} trang.`, 5000);
+
+    setProgress(76, 'Đang dựng cấu trúc sách HTML5…');
+    buildPdfPages();
+    buildPdfThumbs();
+    const startPage = initialPage();
+    updateUI(startPage, false);
+    setProgress(88, 'Đang render các trang đầu tiên…');
+    await Promise.all([renderPdfPage(startPage, true), renderPdfPage(Math.min(startPage + 1, totalPages), true)]);
+
+    if (!createPageFlip(startPage)) await createSinglePdf(startPage);
+    renderAround(startPage);
+    el.loadingCard.hidden = true;
+    el.bookShell.hidden = false;
+    el.download.hidden = !repositoryPdf;
+    setProgress(100);
+    showToast(repositoryPdf ? 'Đang đọc PDF 172 trang từ Vietflexmap.' : 'Đang đọc PDF 172 trang từ máy của bạn.');
+  }
+
+  async function startRemoteMode() {
+    setLoading('Đang chuyển sang bản số hóa trực tuyến…', 'PDF local chưa có; đang kiểm tra 172 ảnh Atlas.', 22);
+    const available = await testRemoteImage();
+    if (!available) throw new Error('Remote image source unavailable');
+
+    destroyBook();
+    pdf = null;
+    mode = 'remote';
+    totalPages = EXPECTED_PAGES;
+    configureTotals();
+    buildRemotePages();
+    buildRemoteThumbs();
+    const startPage = initialPage();
+    updateUI(startPage, false);
+    if (!createPageFlip(startPage)) createSingleRemote(startPage);
+    el.loadingCard.hidden = true;
+    el.bookShell.hidden = false;
+    el.download.hidden = true;
+    showToast('Đang dùng bản số hóa 172 trang trực tuyến.');
+  }
+
+  function showRecovery() {
+    setLoading('Atlas đã sẵn sàng để nạp PDF', 'Nguồn ảnh trực tuyến hiện không cho phép nhúng. Chọn file Atlas_Vietnam_1996.pdf (172 trang) trên máy để mở ngay.', 0);
+    const spinner = el.loadingCard.querySelector('.spinner');
+    if (spinner) spinner.style.display = 'none';
+    const actions = document.createElement('div');
+    actions.className = 'recovery-actions';
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.hidden = true;
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const localPdf = await loadPdfFromFile(file);
+        await startPdfMode(localPdf, false);
+      } catch (err) {
+        console.error(err);
+        showToast('Không thể mở file PDF này.', 4000);
+      }
+    });
+
+    const choose = document.createElement('button');
+    choose.type = 'button';
+    choose.className = 'recovery-btn';
+    choose.textContent = 'Mở PDF 172 trang từ máy';
+    choose.addEventListener('click', () => input.click());
+
+    const source = document.createElement('a');
+    source.className = 'recovery-btn secondary';
+    source.href = SOURCE_VIEWER;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = 'Mở nguồn Atlas';
+
+    actions.append(choose, source, input);
+    el.loadingCard.append(actions);
+    el.bookShell.hidden = true;
+    el.download.hidden = true;
+  }
+
+  async function boot() {
+    injectRuntimeStyles();
+    bindUI();
+    configureTotals();
+    updateUI(initialPage(), false);
+
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      try {
+        setLoading('Đang mở Atlas…', 'Đang tìm Atlas_Vietnam_1996.pdf trong Vietflexmap.', 8);
+        const repoPdf = await loadPdfFromUrl();
+        await startPdfMode(repoPdf, true);
+        return;
+      } catch (err) {
+        console.info('Repository PDF chưa có hoặc không đọc được, chuyển sang ảnh nguồn.', err);
+      }
+    }
 
     try {
-      const task = window.pdfjsLib.getDocument({ url: PDF_URL, disableAutoFetch: false, disableStream: false });
-      task.onProgress = ({ loaded, total }) => {
-        if (!total) return setProgress(18, 'Đang nhận dữ liệu PDF…');
-        setProgress(Math.min(68, Math.round((loaded / total) * 68)), `Đang tải PDF… ${Math.round((loaded / total) * 100)}%`);
-      };
-      pdf = await task.promise;
-      totalPages = pdf.numPages;
-      configureTotals();
-
-      if (totalPages !== EXPECTED_PAGES) showToast(`PDF hiện có ${totalPages} trang; thiết kế chuẩn dự kiến ${EXPECTED_PAGES} trang.`, 5000);
-
-      setProgress(76, 'Đang dựng cấu trúc sách HTML5…');
-      buildPages();
-      buildThumbs();
-
-      currentPage = initialPage();
-      updateUI(currentPage, false);
-      setProgress(86, 'Đang render các trang đầu tiên…');
-      await Promise.all([renderPage(currentPage, true), renderPage(Math.min(currentPage + 1, totalPages), true)]);
-
-      setProgress(94, 'Đang khởi tạo hiệu ứng lật trang…');
-      await initPageFlip(currentPage);
-      renderAround(currentPage);
-
-      el.loadingCard.hidden = true;
-      el.bookShell.hidden = false;
-      el.download.hidden = false;
-      setProgress(100);
+      await startRemoteMode();
     } catch (err) {
-      console.error(err);
-      showFatal('Chưa có Atlas_Vietnam_1996.pdf', 'Đặt file PDF 172 trang vào thư mục gốc của repository. Flipbook sẽ tự đọc PDF bằng PDF.js, không cần 172 ảnh rời.');
+      console.warn('Nguồn ảnh trực tuyến không thể nhúng.', err);
+      showRecovery();
     }
   }
 
