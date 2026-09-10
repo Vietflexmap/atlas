@@ -2,46 +2,55 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1220">
-  <meta name="description" content="Atlas Việt Nam 1996 - trình đọc sách bản đồ dạng HTML5 Flipbook.">
-  <title>Atlas Việt Nam 1996 | Vietflexmap</title>
-  <link rel="preconnect" href="https://unpkg.com">
-  <link rel="preconnect" href="https://www.bandovn.vn">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes">
+  <meta name="theme-color" content="#171612">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Atlas Việt Nam 1996 — sách số dạng HTML5 Flipbook. Nguồn: Vietflexmap số hóa.">
+  <title>Atlas Việt Nam 1996 | Vietflexmap số hóa</title>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://www.bandovn.vn" crossorigin>
   <link rel="stylesheet" href="style.css">
-  <style>@media (min-width:901px){.reader-layout.sidebar-closed{grid-template-columns:0 1fr}}</style>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">VN</div>
-        <div>
+  <div class="app-shell" id="appShell">
+    <header class="topbar" id="topbar">
+      <button class="round-btn menu-btn" id="toggleThumbsBtn" type="button" aria-label="Mở danh sách trang" aria-expanded="false" aria-controls="sidebar">☰</button>
+
+      <div class="brand" aria-label="Thông tin sách">
+        <div class="brand-mark" aria-hidden="true">VN</div>
+        <div class="brand-copy">
           <h1>Atlas Việt Nam 1996</h1>
-          <p>HTML5 Flipbook · Vietflexmap</p>
+          <p>Nguồn: <strong>Vietflexmap số hóa</strong></p>
         </div>
       </div>
 
       <div class="top-actions">
-        <button class="icon-btn" id="toggleThumbsBtn" type="button" title="Mục lục ảnh">☰</button>
-        <button class="icon-btn" id="fullscreenBtn" type="button" title="Toàn màn hình">⛶</button>
+        <button class="round-btn" id="focusBtn" type="button" aria-label="Chế độ tập trung" title="Ẩn/hiện giao diện">◉</button>
+        <button class="round-btn" id="fullscreenBtn" type="button" aria-label="Toàn màn hình" title="Toàn màn hình">⛶</button>
       </div>
     </header>
 
-    <main class="reader-layout">
-      <aside class="sidebar" id="sidebar" aria-label="Danh sách trang">
+    <main class="reader-layout" id="readerLayout">
+      <div class="drawer-scrim" id="drawerScrim" hidden></div>
+
+      <aside class="sidebar" id="sidebar" aria-label="Danh sách trang" aria-hidden="true">
         <div class="sidebar-head">
-          <strong>Trang Atlas</strong>
-          <span id="sidebarCount">172 trang</span>
+          <div>
+            <span class="eyebrow">MỤC LỤC ẢNH</span>
+            <strong>172 trang Atlas</strong>
+          </div>
+          <button class="round-btn small" id="closeThumbsBtn" type="button" aria-label="Đóng danh sách trang">×</button>
         </div>
-        <div class="thumb-grid" id="thumbGrid"></div>
+        <div class="thumb-grid" id="thumbGrid" role="list"></div>
       </aside>
 
-      <section class="reader-stage" id="readerStage">
-        <div class="status-card" id="loadingState">
-          <div class="spinner"></div>
+      <section class="reader-stage" id="readerStage" aria-label="Trình đọc Atlas">
+        <div class="stage-vignette" aria-hidden="true"></div>
+
+        <div class="status-card" id="loadingState" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
           <strong>Đang mở Atlas…</strong>
-          <span>Đang chuẩn bị 172 trang ảnh.</span>
+          <span>Chuẩn bị trải nghiệm đọc 172 trang.</span>
         </div>
 
         <div class="book-wrap" id="bookWrap" hidden>
@@ -49,30 +58,55 @@
         </div>
 
         <div class="fallback-reader" id="fallbackReader" hidden>
-          <img id="fallbackImage" alt="Trang Atlas">
+          <img id="fallbackImage" alt="Trang Atlas Việt Nam">
         </div>
+
+        <button class="edge-nav edge-prev" id="edgePrev" type="button" aria-label="Trang trước" title="Trang trước"><span>‹</span></button>
+        <button class="edge-nav edge-next" id="edgeNext" type="button" aria-label="Trang sau" title="Trang sau"><span>›</span></button>
+
+        <div class="source-badge" aria-label="Nguồn dữ liệu">Nguồn: <strong>Vietflexmap số hóa</strong></div>
       </section>
     </main>
 
-    <footer class="toolbar" aria-label="Điều khiển sách">
-      <button class="tool-btn" id="firstBtn" type="button" title="Trang đầu">⏮</button>
-      <button class="tool-btn primary" id="prevBtn" type="button" title="Trang trước">‹</button>
-
-      <div class="page-control">
-        <label for="pageInput">Trang</label>
-        <input id="pageInput" type="number" min="1" max="172" value="1" inputmode="numeric">
-        <span>/ <b id="pageTotal">172</b></span>
+    <footer class="reader-controls" id="readerControls" aria-label="Điều khiển sách">
+      <div class="progress-row">
+        <span class="progress-page" id="progressPage">01</span>
+        <input id="pageRange" class="page-range" type="range" min="1" max="172" value="1" step="1" aria-label="Chọn trang">
+        <span class="progress-page muted" id="progressTotal">172</span>
       </div>
 
-      <button class="tool-btn primary" id="nextBtn" type="button" title="Trang sau">›</button>
-      <button class="tool-btn" id="lastBtn" type="button" title="Trang cuối">⏭</button>
+      <div class="toolbar">
+        <div class="toolbar-group desktop-only">
+          <button class="tool-btn" id="firstBtn" type="button" aria-label="Trang đầu" title="Trang đầu">⏮</button>
+        </div>
 
-      <div class="divider"></div>
-      <button class="tool-btn" id="zoomOutBtn" type="button" title="Thu nhỏ">−</button>
-      <span class="zoom-label" id="zoomLabel">100%</span>
-      <button class="tool-btn" id="zoomInBtn" type="button" title="Phóng to">+</button>
-      <button class="tool-btn" id="resetZoomBtn" type="button" title="Về 100%">1:1</button>
+        <div class="toolbar-group nav-group">
+          <button class="tool-btn primary" id="prevBtn" type="button" aria-label="Trang trước" title="Trang trước">‹</button>
+
+          <div class="page-control" aria-label="Trang hiện tại">
+            <span class="page-label">Trang</span>
+            <input id="pageInput" type="number" min="1" max="172" value="1" inputmode="numeric" aria-label="Nhập số trang">
+            <span class="page-total">/ <b id="pageTotal">172</b></span>
+          </div>
+
+          <button class="tool-btn primary" id="nextBtn" type="button" aria-label="Trang sau" title="Trang sau">›</button>
+        </div>
+
+        <div class="toolbar-group desktop-only">
+          <button class="tool-btn" id="lastBtn" type="button" aria-label="Trang cuối" title="Trang cuối">⏭</button>
+        </div>
+
+        <div class="toolbar-separator desktop-only" aria-hidden="true"></div>
+
+        <div class="toolbar-group zoom-group desktop-only">
+          <button class="tool-btn" id="zoomOutBtn" type="button" aria-label="Thu nhỏ" title="Thu nhỏ">−</button>
+          <button class="zoom-value" id="resetZoomBtn" type="button" aria-label="Đặt lại tỷ lệ" title="Đặt lại tỷ lệ"><span id="zoomLabel">100%</span></button>
+          <button class="tool-btn" id="zoomInBtn" type="button" aria-label="Phóng to" title="Phóng to">+</button>
+        </div>
+      </div>
     </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>
 
   <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
