@@ -10,10 +10,10 @@ echo          VIETFLEXMAP - SO HOA ATLAS VIET NAM 1996
 echo ===============================================================
 echo.
 echo Cong cu nay se:
-echo   1. Tai 172 trang tu bandovn.vn tren CHINH MAY WINDOWS NAY
-echo   2. Kiem tra anh
-echo   3. Tao Atlas_Vietnam_1996.pdf
-echo   4. Dua pages/ + PDF vao git va push len Vietflexmap/atlas
+echo   1. Mo viewer bandovn.vn bang Google Chrome tren CHINH MAY NAY
+echo   2. Lay 172 anh tu cung phien Chrome (same-origin)
+echo   3. Kiem tra va tao Atlas_Vietnam_1996.pdf
+echo   4. Push pages/ + PDF vao Vietflexmap/atlas
 echo.
 echo Nguon hien thi: Vietflexmap so hoa
 echo.
@@ -34,12 +34,13 @@ if %errorlevel%==0 (
 )
 
 echo [1/4] Cai/kiem tra thu vien Python...
-%PY% -m pip install --upgrade requests pillow img2pdf
+%PY% -m pip install --upgrade selenium pillow img2pdf requests
 if errorlevel 1 goto :fail
 
 echo.
-echo [2/4] Tai 172 trang va tao PDF...
-%PY% scripts\build_atlas_assets.py
+echo [2/4] Mo Chrome, lay 172 trang va tao PDF...
+echo      KHONG DONG cua so Chrome cho den khi chuong trinh hoan tat.
+%PY% scripts\build_atlas_windows.py
 if errorlevel 1 goto :fail
 
 echo.
@@ -58,7 +59,7 @@ echo.
 where git >nul 2>&1
 if errorlevel 1 (
   echo [CANH BAO] Khong tim thay Git. File da tao xong nhung chua push len GitHub.
-  echo Hay cai Git, sau do chay lai file nay hoac upload pages/ va PDF vao repository.
+  echo PDF nam tai: %CD%\Atlas_Vietnam_1996.pdf
   goto :success_local
 )
 
@@ -98,7 +99,7 @@ echo.
 echo ===============================================================
 echo HOAN TAT 172/172 + PDF + PUSH GITHUB
 echo ===============================================================
-echo Website se tu deploy qua GitHub Pages.
+echo GitHub Pages se tu deploy lai.
 echo https://vietflexmap.github.io/atlas/
 echo.
 pause
@@ -109,8 +110,7 @@ echo.
 echo ===============================================================
 echo [LOI] Qua trinh bi dung.
 echo ===============================================================
-echo Neu trang bandovn.vn mo duoc tren Chrome nhung Python khong tai duoc,
-echo hay gui cho ChatGPT phan loi hien tren man hinh de chuyen sang Selenium.
+echo Gui cho ChatGPT phan loi hien tren man hinh neu can xu ly tiep.
 echo.
 pause
 exit /b 1
