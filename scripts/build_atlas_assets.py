@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build local Atlas assets for Vietflexmap/atlas.
 
-Downloads 172 page images from the source viewer, validates every page, writes
-pages/manifest.json and creates Atlas_Vietnam_1996.pdf. The published HTML5
-Flipbook reads local pages/*.jpg, so normal readers do not hotlink the source.
+Primary source is the public HTML5 viewer at bandovn.vn. If that server is not
+reachable from GitHub Actions, the builder falls back to Internet Archive's
+Wayback Machine for archived copies of the same public page-image URLs.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import img2pdf
 import requests
@@ -26,11 +27,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 TOTAL_PAGES = 172
 SOURCE_VIEWER = "https://www.bandovn.vn/onlinescan/atlasvietnam/"
-SOURCE_CANDIDATES = [
+DIRECT_PATTERNS = [
     "https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
-    "https://bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
     "http://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/{page}.jpg",
 ]
+WAYBACK_AVAILABLE = "https://archive.org/wayback/available"
 ROOT = Path(__file__).resolve().parents[1]
 PAGES_DIR = ROOT / "pages"
 MANIFEST = PAGES_DIR / "manifest.json"
@@ -40,7 +41,9 @@ TIMEOUT = 20
 RETRIES = 3
 MIN_BYTES = 8_000
 MAX_PDF_BYTES = 92 * 1024 * 1024
-ACTIVE_PATTERN = SOURCE_CANDIDATES[0]
+
+SOURCE_MODE = "direct"
+ACTIVE_PATTERN = DIRECT_PATTERNS[0]
 ACTIVE_VERIFY = True
 
 HEADERS = {
@@ -52,7 +55,6 @@ HEADERS = {
     "Referer": SOURCE_VIEWER,
     "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     "Accept-Language": "vi,en-US;q=0.9,en;q=0.8",
-    "Connection": "keep-alive",
 }
 
 
@@ -75,36 +77,77 @@ def validate_image(data: bytes, page: int) -> tuple[int, int]:
     return width, height
 
 
-def probe_source() -> tuple[str, bool]:
-    """Find one reachable source URL before spawning 172 downloads."""
-    print("Probing Atlas image source...")
+def original_urls(page: int) -> list[str]:
+    return [pattern.format(page=page) for pattern in DIRECT_PATTERNS]
+
+
+def wayback_url_for(original: str, session: requests.Session) -> str | None:
+    """Return raw Wayback replay URL for the closest archived capture."""
+    response = session.get(
+        WAYBACK_AVAILABLE,
+        params={"url": original},
+        timeout=15,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    closest = payload.get("archived_snapshots", {}).get("closest")
+    if not closest or not closest.get("available") or str(closest.get("status")) != "200":
+        return None
+    timestamp = closest.get("timestamp")
+    if not timestamp:
+        return None
+    # id_ asks Wayback for the archived original bytes, without replay rewriting.
+    return f"https://web.archive.org/web/{timestamp}id_/{original}"
+
+
+def fetch_wayback_page(page: int, session: requests.Session) -> tuple[bytes, str]:
+    errors: list[str] = []
+    for original in original_urls(page):
+        try:
+            archived = wayback_url_for(original, session)
+            if not archived:
+                errors.append(f"no archived capture for {original}")
+                continue
+            response = session.get(archived, timeout=TIMEOUT, allow_redirects=True)
+            response.raise_for_status()
+            validate_image(response.content, page)
+            return response.content, archived
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{original}: {exc}")
+    raise RuntimeError("; ".join(errors))
+
+
+def probe_source() -> None:
+    global SOURCE_MODE, ACTIVE_PATTERN, ACTIVE_VERIFY
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    attempts: list[tuple[str, bool]] = []
-    for pattern in SOURCE_CANDIDATES:
-        attempts.append((pattern, True))
-        if pattern.startswith("https://"):
-            attempts.append((pattern, False))
-
-    errors: list[str] = []
-    for pattern, verify in attempts:
+    print("Probing live Atlas source...", flush=True)
+    for pattern in DIRECT_PATTERNS:
         url = pattern.format(page=1)
-        try:
-            response = session.get(url, timeout=10, allow_redirects=True, verify=verify)
-            response.raise_for_status()
-            validate_image(response.content, 1)
-            print(f"Source OK: {url} (TLS verify={verify})")
-            return pattern, verify
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{url} verify={verify}: {exc}")
-            print(f"Source probe failed: {url} verify={verify}: {exc}")
+        for verify in ([True, False] if url.startswith("https://") else [True]):
+            try:
+                response = session.get(url, timeout=5, allow_redirects=True, verify=verify)
+                response.raise_for_status()
+                validate_image(response.content, 1)
+                SOURCE_MODE = "direct"
+                ACTIVE_PATTERN = pattern
+                ACTIVE_VERIFY = verify
+                print(f"Live source OK: {url}", flush=True)
+                return
+            except Exception as exc:  # noqa: BLE001
+                print(f"Live source unavailable: {url}: {exc}", flush=True)
 
-    raise RuntimeError("No reachable Atlas image source.\n" + "\n".join(errors))
+    print("Live server is unreachable. Probing Internet Archive...", flush=True)
+    data, archived = fetch_wayback_page(1, session)
+    validate_image(data, 1)
+    SOURCE_MODE = "wayback"
+    ACTIVE_PATTERN = archived
+    ACTIVE_VERIFY = True
+    print(f"Wayback fallback OK: {archived}", flush=True)
 
 
 def download_page(page: int) -> dict:
-    url = ACTIVE_PATTERN.format(page=page)
     target = PAGES_DIR / f"{page}.jpg"
 
     if target.exists() and target.stat().st_size >= MIN_BYTES:
@@ -114,7 +157,6 @@ def download_page(page: int) -> dict:
             return {
                 "page": page,
                 "file": target.name,
-                "source": url,
                 "bytes": len(data),
                 "width": width,
                 "height": height,
@@ -124,26 +166,31 @@ def download_page(page: int) -> dict:
         except Exception:
             target.unlink(missing_ok=True)
 
-    error: Exception | None = None
     session = requests.Session()
     session.headers.update(HEADERS)
+    error: Exception | None = None
 
     for attempt in range(1, RETRIES + 1):
         try:
-            response = session.get(
-                url,
-                timeout=TIMEOUT,
-                allow_redirects=True,
-                verify=ACTIVE_VERIFY,
-            )
-            response.raise_for_status()
-            data = response.content
+            if SOURCE_MODE == "wayback":
+                data, resolved_url = fetch_wayback_page(page, session)
+            else:
+                resolved_url = ACTIVE_PATTERN.format(page=page)
+                response = session.get(
+                    resolved_url,
+                    timeout=TIMEOUT,
+                    allow_redirects=True,
+                    verify=ACTIVE_VERIFY,
+                )
+                response.raise_for_status()
+                data = response.content
+
             width, height = validate_image(data, page)
             target.write_bytes(data)
             return {
                 "page": page,
                 "file": target.name,
-                "source": url,
+                "source": resolved_url,
                 "bytes": len(data),
                 "width": width,
                 "height": height,
@@ -157,7 +204,6 @@ def download_page(page: int) -> dict:
     return {
         "page": page,
         "file": target.name,
-        "source": url,
         "bytes": 0,
         "status": "failed",
         "error": str(error),
@@ -165,12 +211,12 @@ def download_page(page: int) -> dict:
 
 
 def download_all() -> list[dict]:
-    global ACTIVE_PATTERN, ACTIVE_VERIFY
     PAGES_DIR.mkdir(parents=True, exist_ok=True)
-    ACTIVE_PATTERN, ACTIVE_VERIFY = probe_source()
+    probe_source()
+    print(f"Source mode: {SOURCE_MODE}", flush=True)
+    print(f"Downloading {TOTAL_PAGES} pages with {WORKERS} workers", flush=True)
     results: list[dict] = []
 
-    print(f"Downloading {TOTAL_PAGES} Atlas pages with {WORKERS} workers")
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as executor:
         futures = {executor.submit(download_page, page): page for page in range(1, TOTAL_PAGES + 1)}
         for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
@@ -198,7 +244,7 @@ def write_manifest(results: list[dict]) -> None:
                 "title": "Atlas Việt Nam 1996",
                 "credit": "Nguồn: Vietflexmap số hóa",
                 "sourceViewer": SOURCE_VIEWER,
-                "resolvedImagePattern": ACTIVE_PATTERN,
+                "retrievalMode": SOURCE_MODE,
                 "totalPages": TOTAL_PAGES,
                 "generatedUtc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "pages": results,
@@ -247,14 +293,13 @@ def build_pdf() -> None:
     temp_pdf = PDF_PATH.with_suffix(".tmp.pdf")
     make_pdf_from_jpegs(files, temp_pdf)
     size = temp_pdf.stat().st_size
-    print(f"Lossless image PDF: {size / 1024 / 1024:.1f} MB")
+    print(f"Lossless image PDF: {size / 1024 / 1024:.1f} MB", flush=True)
 
     if size <= MAX_PDF_BYTES:
         temp_pdf.replace(PDF_PATH)
         return
 
     temp_pdf.unlink(missing_ok=True)
-    print("PDF exceeds safe GitHub size; making a high-quality optimized PDF.")
     attempts = [(88, 2600), (82, 2300), (76, 2100), (70, 1900), (64, 1700)]
     with tempfile.TemporaryDirectory(prefix="atlas-pdf-") as temp:
         root = Path(temp)
@@ -263,7 +308,7 @@ def build_pdf() -> None:
             optimized = optimize_pages_for_pdf(files, quality, max_side, work)
             make_pdf_from_jpegs(optimized, temp_pdf)
             size = temp_pdf.stat().st_size
-            print(f"Optimized q={quality}, max={max_side}: {size / 1024 / 1024:.1f} MB")
+            print(f"Optimized q={quality}, max={max_side}: {size / 1024 / 1024:.1f} MB", flush=True)
             if size <= MAX_PDF_BYTES:
                 temp_pdf.replace(PDF_PATH)
                 return
@@ -278,10 +323,9 @@ def verify_final(results: list[dict]) -> None:
         raise RuntimeError(f"Expected {TOTAL_PAGES} pages, got {len(results)}")
     if not PDF_PATH.exists() or PDF_PATH.stat().st_size < 1_000_000:
         raise RuntimeError("Final PDF was not created correctly")
-    print("\nBuild complete")
-    print(f"Pages: {TOTAL_PAGES}/{TOTAL_PAGES}")
-    print(f"PDF: {PDF_PATH.name} ({PDF_PATH.stat().st_size / 1024 / 1024:.1f} MB)")
-    print(f"Manifest: {MANIFEST.relative_to(ROOT)}")
+    print("Build complete", flush=True)
+    print(f"Pages: {TOTAL_PAGES}/{TOTAL_PAGES}", flush=True)
+    print(f"PDF: {PDF_PATH.name} ({PDF_PATH.stat().st_size / 1024 / 1024:.1f} MB)", flush=True)
 
 
 def main() -> None:
