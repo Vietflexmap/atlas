@@ -12,11 +12,11 @@ echo.
 echo Cong cu nay se:
 echo   1. Tai 172 trang tu bandovn.vn tren CHINH MAY WINDOWS NAY
 echo   2. Kiem tra anh
-necho   3. Tao Atlas_Vietnam_1996.pdf
-necho   4. Dua pages/ + PDF vao git va push len Vietflexmap/atlas
-necho.
+echo   3. Tao Atlas_Vietnam_1996.pdf
+echo   4. Dua pages/ + PDF vao git va push len Vietflexmap/atlas
+echo.
 echo Nguon hien thi: Vietflexmap so hoa
-necho.
+echo.
 
 where py >nul 2>&1
 if %errorlevel%==0 (
@@ -50,10 +50,10 @@ if not exist "pages\manifest.json" goto :fail
 if not exist "Atlas_Vietnam_1996.pdf" goto :fail
 
 echo     OK pages\1.jpg
-necho     OK pages\172.jpg
-necho     OK pages\manifest.json
-necho     OK Atlas_Vietnam_1996.pdf
-necho.
+echo     OK pages\172.jpg
+echo     OK pages\manifest.json
+echo     OK Atlas_Vietnam_1996.pdf
+echo.
 
 where git >nul 2>&1
 if errorlevel 1 (
@@ -86,10 +86,10 @@ goto :success
 echo.
 echo ===============================================================
 echo HOAN TAT SO HOA TREN MAY NAY
-necho ===============================================================
+echo ===============================================================
 echo PDF: %CD%\Atlas_Vietnam_1996.pdf
-necho Anh: %CD%\pages\1.jpg ... 172.jpg
-necho.
+echo Anh: %CD%\pages\1.jpg ... 172.jpg
+echo.
 pause
 exit /b 0
 
@@ -97,10 +97,10 @@ exit /b 0
 echo.
 echo ===============================================================
 echo HOAN TAT 172/172 + PDF + PUSH GITHUB
-necho ===============================================================
+echo ===============================================================
 echo Website se tu deploy qua GitHub Pages.
-necho https://vietflexmap.github.io/atlas/
-necho.
+echo https://vietflexmap.github.io/atlas/
+echo.
 pause
 exit /b 0
 
@@ -108,9 +108,9 @@ exit /b 0
 echo.
 echo ===============================================================
 echo [LOI] Qua trinh bi dung.
-necho ===============================================================
+echo ===============================================================
 echo Neu trang bandovn.vn mo duoc tren Chrome nhung Python khong tai duoc,
-necho hay gui cho ChatGPT phan loi hien tren man hinh de chuyen sang Selenium.
-necho.
+echo hay gui cho ChatGPT phan loi hien tren man hinh de chuyen sang Selenium.
+echo.
 pause
 exit /b 1
