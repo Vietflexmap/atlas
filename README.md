@@ -1,125 +1,129 @@
 # Atlas Việt Nam 1996 — HTML5 Flipbook
 
-Trình đọc Atlas dạng **quyển sách số** chạy thuần HTML/CSS/JavaScript, tối ưu cho desktop, tablet và điện thoại, xuất bản trực tiếp bằng GitHub Pages.
+Trình đọc **Atlas Việt Nam 1996** dạng quyển sách số, tối ưu cho desktop, tablet và điện thoại, triển khai bằng GitHub Pages.
 
 > **Nguồn hiển thị trên sản phẩm: Vietflexmap số hóa.**
 
+## Kiến trúc production
+
+Website được thiết kế để **đọc ảnh local trong repository**, không phụ thuộc máy chủ nguồn khi người dùng mở sách:
+
+```text
+bandovn.vn (chỉ dùng lúc số hóa)
+        │
+        ▼
+Chrome same-origin trên máy số hóa
+        │
+        ├── pages/1.jpg ... pages/172.jpg
+        ├── pages/manifest.json
+        └── Atlas_Vietnam_1996.pdf
+                    │
+                    ▼
+             Vietflexmap/atlas
+                    │
+          HTML5 Flipbook + PDF
+```
+
+Viewer gốc công bố chuỗi **172 ảnh**. Ấn phẩm vật lý thường được mô tả là **163 trang/lá**, nên số ảnh viewer có thể bao gồm bìa và các trang phụ của bản scan.
+
 ## Trải nghiệm đọc
 
-- 172 trang Atlas theo cấu trúc ảnh của viewer gốc.
-- Hiệu ứng lật trang HTML5 bằng [StPageFlip](https://github.com/Nodlik/StPageFlip).
-- Book-first UI: trang sách luôn là trung tâm, giao diện điều khiển tối giản.
-- Responsive theo desktop, tablet, điện thoại dọc và điện thoại ngang.
-- Drawer thumbnail 172 trang không làm co vùng sách.
-- Thanh tiến độ 1–172 để kéo nhanh đến vị trí mong muốn.
-- Trang đầu/cuối, trước/sau, nhập trực tiếp số trang và vùng bấm mép sách.
-- Fullscreen, zoom và Focus Mode để đọc không bị phân tán.
-- Ghi nhớ trang đọc gần nhất bằng `localStorage`.
-- URL `#page=...` để chia sẻ đúng một trang Atlas.
-- Phím tắt desktop và hỗ trợ thao tác cảm ứng.
-- Fallback đọc đơn trang nếu thư viện Flipbook CDN không tải được.
-- Hai chế độ nguồn: ảnh trực tuyến và ảnh lưu local trong repository.
-- Tự chuyển về nguồn trực tuyến nếu yêu cầu `?source=local` nhưng chưa có ảnh local.
-- Hỗ trợ `prefers-reduced-motion` và trạng thái focus/ARIA cơ bản.
-- GitHub Actions tự deploy khi cập nhật nhánh `main`.
+- Flipbook 172 ảnh bằng **StPageFlip**.
+- Desktop: trải nghiệm sách mở; mobile/tablet tự chuyển portrait/landscape phù hợp.
+- Book-first UI, nền đọc trung tính và hiệu ứng bóng/gáy sách.
+- Drawer thumbnail 172 trang.
+- Thanh tiến độ 1–172, nhập số trang, nút trước/sau và vùng bấm mép sách.
+- Fullscreen, zoom, Focus Mode.
+- Ghi nhớ trang gần nhất bằng `localStorage`.
+- URL `#page=...` để chia sẻ đúng trang.
+- Phím tắt desktop và thao tác cảm ứng.
+- Fallback đọc đơn trang nếu thư viện Flipbook gặp lỗi.
+- `no-referrer` cho ảnh nguồn dự phòng nhằm giảm lỗi hotlink theo Referer.
+- Nút tải PDF chỉ xuất hiện khi `Atlas_Vietnam_1996.pdf` thực sự tồn tại.
+- GitHub Actions tự deploy website khi `main` thay đổi.
 
-## Chạy ngay
+## Số hóa hoàn chỉnh trên Windows — 1 click
 
-Không cần build:
+Máy chủ `bandovn.vn` hiện không phản hồi từ GitHub-hosted runners ở Mỹ và các CDN/proxy thử nghiệm cũng không lấy được ảnh. Vì vậy công cụ production dùng **Chrome trên máy Windows có thể mở viewer nguồn**, sau đó lấy ảnh bằng `fetch()` từ chính phiên same-origin của Chrome.
 
-```bash
-python -m http.server 8000
-```
+### Cách chạy
 
-Mở `http://localhost:8000`.
-
-> Không nên mở `index.html` bằng `file://` khi kiểm thử; hãy dùng HTTP server cục bộ.
-
-## Nguồn ảnh
-
-Website hiện dựng URL ảnh theo quy tắc:
-
-```text
-https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/1.jpg
-...
-https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/172.jpg
-```
-
-Cấu hình nằm ở đầu `app.js`:
-
-```js
-const TOTAL_PAGES = 172;
-const REMOTE_BASE = 'https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile';
-```
-
-Dòng credit giao diện được đặt thống nhất là:
-
-```text
-Nguồn: Vietflexmap số hóa
-```
-
-## Lưu toàn bộ ảnh vào repository
-
-Cài `requests`:
+Clone repository:
 
 ```bash
-pip install requests
+git clone https://github.com/Vietflexmap/atlas.git
+cd atlas
 ```
 
-Tải 172 trang:
-
-```bash
-python scripts/download_pages.py
-```
-
-Script tạo:
+Sau đó double-click:
 
 ```text
-pages/
-├── 1.jpg
-├── 2.jpg
-├── ...
-├── 172.jpg
-└── manifest.json
+BUILD_ATLAS_WINDOWS.bat
 ```
 
-Sau khi commit thư mục `pages/`, mở website với:
+Công cụ tự động:
+
+1. Cài/kiểm tra `selenium`, `pillow`, `img2pdf`, `requests`.
+2. Mở Chrome vào viewer gốc.
+3. Lấy lần lượt `1.jpg → 172.jpg` từ cùng origin/session Chrome.
+4. Kiểm tra định dạng và kích thước từng ảnh.
+5. Ghi `pages/manifest.json` kèm SHA-256.
+6. Tạo `Atlas_Vietnam_1996.pdf`.
+7. Nếu PDF vượt giới hạn file thông thường của GitHub, tự tối ưu chất lượng cao.
+8. `git add`, commit, pull --rebase và push lên `main`.
+9. GitHub Pages tự deploy lại.
+
+**Không đóng cửa sổ Chrome tự động** trong lúc công cụ đang lấy 172 trang.
+
+## Kết quả sau số hóa
 
 ```text
-?source=local
+atlas/
+├── Atlas_Vietnam_1996.pdf
+├── pages/
+│   ├── 1.jpg
+│   ├── 2.jpg
+│   ├── ...
+│   ├── 172.jpg
+│   └── manifest.json
+├── index.html
+├── style.css
+├── app.js
+├── BUILD_ATLAS_WINDOWS.bat
+├── scripts/
+│   ├── build_atlas_windows.py
+│   ├── build_atlas_assets.py
+│   └── download_pages.py
+└── .github/workflows/pages.yml
 ```
 
-Ví dụ:
+Sau khi assets được push, website mặc định sử dụng `?source=local`. Có thể ép chế độ đối chiếu nguồn bằng:
 
 ```text
-https://vietflexmap.github.io/atlas/?source=local#page=50
+?source=remote
 ```
 
-## GitHub Pages
-
-Workflow `.github/workflows/pages.yml` đã có sẵn. Website được triển khai tại:
+## Website
 
 ```text
 https://vietflexmap.github.io/atlas/
 ```
 
-Nếu Pages chưa được kích hoạt, vào **Settings → Pages → Build and deployment → Source → GitHub Actions**.
+Workflow deploy nằm tại `.github/workflows/pages.yml`.
 
-## Cấu trúc
+## Chạy local để kiểm thử giao diện
+
+```bash
+python -m http.server 8000
+```
+
+Mở:
 
 ```text
-atlas/
-├── index.html
-├── style.css
-├── app.js
-├── .nojekyll
-├── .github/
-│   └── workflows/
-│       └── pages.yml
-├── scripts/
-│   └── download_pages.py
-└── pages/                 # tạo khi chạy downloader
+http://localhost:8000/
 ```
+
+Không nên mở `index.html` trực tiếp bằng `file://`.
 
 ## Phím tắt
 
@@ -135,6 +139,6 @@ atlas/
 | `+` / `-` | Zoom |
 | `0` | Zoom 100% |
 
-## Ghi chú dữ liệu
+## Nguồn và quyền sử dụng
 
-Website là trình đọc và giao diện số hóa/hiển thị lại dữ liệu ảnh Atlas. Quyền đối với nội dung Atlas và ảnh nguồn thuộc về chủ sở hữu/đơn vị phát hành tương ứng; khi triển khai công khai hoặc sao lưu lâu dài cần bảo đảm quyền sử dụng phù hợp.
+Nguồn scan trực tuyến được dùng làm đầu vào số hóa từ viewer công khai tại `bandovn.vn/onlinescan/atlasvietnam/`. Dòng nhận diện trên giao diện là **“Nguồn: Vietflexmap số hóa”**. Quyền đối với nội dung Atlas/ấn phẩm gốc vẫn thuộc chủ sở hữu và đơn vị phát hành tương ứng; việc công bố, sao lưu và phân phối cần bảo đảm quyền sử dụng phù hợp.
