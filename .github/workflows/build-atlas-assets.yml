@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: atlas-assets
+  group: atlas-assets-v2
   cancel-in-progress: true
 
 jobs:
