@@ -8,7 +8,6 @@
   <meta name="description" content="Atlas Việt Nam 1996 — sách số dạng HTML5 Flipbook. Nguồn: Vietflexmap số hóa.">
   <title>Atlas Việt Nam 1996 | Vietflexmap số hóa</title>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
-  <link rel="preconnect" href="https://www.bandovn.vn" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,6 +24,7 @@
       </div>
 
       <div class="top-actions">
+        <a class="round-btn" href="Atlas_Vietnam_1996.pdf" download="Atlas_Vietnam_1996.pdf" aria-label="Tải Atlas PDF" title="Tải Atlas PDF" style="text-decoration:none">↓</a>
         <button class="round-btn" id="focusBtn" type="button" aria-label="Chế độ tập trung" title="Ẩn/hiện giao diện">◉</button>
         <button class="round-btn" id="fullscreenBtn" type="button" aria-label="Toàn màn hình" title="Toàn màn hình">⛶</button>
       </div>
@@ -50,7 +50,7 @@
         <div class="status-card" id="loadingState" role="status" aria-live="polite">
           <div class="spinner" aria-hidden="true"></div>
           <strong>Đang mở Atlas…</strong>
-          <span>Chuẩn bị trải nghiệm đọc 172 trang.</span>
+          <span>Đang nạp 172 trang số hóa từ Vietflexmap.</span>
         </div>
 
         <div class="book-wrap" id="bookWrap" hidden>
@@ -109,6 +109,13 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>
 
+  <script>
+    // Production mặc định đọc ảnh trong repository để tránh phụ thuộc hotlink bandovn.vn.
+    // Có thể ép đọc nguồn trực tuyến bằng ?source=remote để kiểm tra/đối chiếu.
+    if (!new URLSearchParams(location.search).has('source')) {
+      history.replaceState(null, '', `${location.pathname}?source=local${location.hash || ''}`);
+    }
+  </script>
   <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
   <script src="app.js"></script>
 </body>
