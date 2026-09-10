@@ -1,106 +1,101 @@
-# Atlas Việt Nam 1996 — HTML5 Flipbook
+# Atlas Việt Nam 1996 — Flipbook HTML5 172 trang
 
-Trình đọc **Atlas Việt Nam 1996** dạng quyển sách số, tối ưu cho desktop, tablet và điện thoại, triển khai bằng GitHub Pages.
+Trình đọc **Atlas Việt Nam 1996** dạng quyển sách số, tối ưu cho desktop, tablet và điện thoại, triển khai trực tiếp bằng GitHub Pages.
 
 > **Nguồn hiển thị trên sản phẩm: Vietflexmap số hóa.**
 
-## Kiến trúc production
+## Kiến trúc production mới
 
-Website được thiết kế để **đọc ảnh local trong repository**, không phụ thuộc máy chủ nguồn khi người dùng mở sách:
+Bản production dùng **một PDF local 172 trang** làm nguồn duy nhất. Trình duyệt dùng PDF.js render trang theo nhu cầu, sau đó StPageFlip tạo hiệu ứng lật sách HTML5.
 
 ```text
-bandovn.vn (chỉ dùng lúc số hóa)
-        │
-        ▼
-Chrome same-origin trên máy số hóa
-        │
-        ├── pages/1.jpg ... pages/172.jpg
-        ├── pages/manifest.json
-        └── Atlas_Vietnam_1996.pdf
-                    │
-                    ▼
-             Vietflexmap/atlas
-                    │
-          HTML5 Flipbook + PDF
+Atlas_Vietnam_1996.pdf (172 trang)
+              │
+              ▼
+           PDF.js
+     render canvas theo nhu cầu
+              │
+      ┌───────┴────────┐
+      ▼                ▼
+ StPageFlip         Thumbnail
+ HTML5 book         lazy render
+      │
+      ▼
+Desktop / Tablet / Mobile
 ```
 
-Viewer gốc công bố chuỗi **172 ảnh**. Ấn phẩm vật lý thường được mô tả là **163 trang/lá**, nên số ảnh viewer có thể bao gồm bìa và các trang phụ của bản scan.
+Không cần lưu 172 ảnh JPG riêng trong repository và không còn phụ thuộc hotlink từ máy chủ nguồn khi người dùng đọc sách.
 
 ## Trải nghiệm đọc
 
-- Flipbook 172 ảnh bằng **StPageFlip**.
-- Desktop: trải nghiệm sách mở; mobile/tablet tự chuyển portrait/landscape phù hợp.
-- Book-first UI, nền đọc trung tính và hiệu ứng bóng/gáy sách.
-- Drawer thumbnail 172 trang.
-- Thanh tiến độ 1–172, nhập số trang, nút trước/sau và vùng bấm mép sách.
-- Fullscreen, zoom, Focus Mode.
-- Ghi nhớ trang gần nhất bằng `localStorage`.
-- URL `#page=...` để chia sẻ đúng trang.
-- Phím tắt desktop và thao tác cảm ứng.
-- Fallback đọc đơn trang nếu thư viện Flipbook gặp lỗi.
-- `no-referrer` cho ảnh nguồn dự phòng nhằm giảm lỗi hotlink theo Referer.
-- Nút tải PDF chỉ xuất hiện khi `Atlas_Vietnam_1996.pdf` thực sự tồn tại.
-- GitHub Actions tự deploy website khi `main` thay đổi.
+- **172 trang** đọc trực tiếp từ `Atlas_Vietnam_1996.pdf`.
+- Hiệu ứng lật trang bằng **StPageFlip 2.0.7**.
+- Render PDF bằng **PDF.js** với lazy rendering để giảm RAM và thời gian mở sách.
+- Desktop hiển thị sách mở hai trang; màn hình hẹp tự chuyển trải nghiệm một trang.
+- Trang bìa và trang cuối được xử lý như bìa cứng của Flipbook.
+- Drawer thumbnail 172 trang, chỉ render thumbnail khi người dùng cuộn đến.
+- Thanh tiến độ, nhập số trang, trang đầu/cuối, trước/sau.
+- Vùng bấm mép trái/phải để lật nhanh.
+- Fullscreen, zoom 65–180%, Focus Mode.
+- Ghi nhớ trang đọc gần nhất bằng `localStorage`.
+- Link trực tiếp dạng `#page=75`.
+- Phím tắt desktop: mũi tên, PageUp/PageDown, Home/End, F, M, +, -, 0.
+- Hỗ trợ `prefers-reduced-motion` và accessibility cơ bản.
+- Fallback đọc một trang nếu thư viện StPageFlip không tải được.
+- Dòng credit cố định: **Nguồn: Vietflexmap số hóa**.
 
-## Số hóa hoàn chỉnh trên Windows — 1 click
+## File bắt buộc
 
-Máy chủ `bandovn.vn` hiện không phản hồi từ GitHub-hosted runners ở Mỹ và các CDN/proxy thử nghiệm cũng không lấy được ảnh. Vì vậy công cụ production dùng **Chrome trên máy Windows có thể mở viewer nguồn**, sau đó lấy ảnh bằng `fetch()` từ chính phiên same-origin của Chrome.
+Đặt PDF tại thư mục gốc repository với tên chính xác:
 
-### Cách chạy
+```text
+Atlas_Vietnam_1996.pdf
+```
 
-Clone repository:
+Cấu trúc production:
+
+```text
+atlas/
+├── Atlas_Vietnam_1996.pdf
+├── index.html
+├── style.css
+├── app.js
+├── PUBLISH_PDF_WINDOWS.bat
+├── scripts/
+│   └── publish_local_pdf.py
+└── .github/
+    └── workflows/
+        └── pages.yml
+```
+
+## Xuất bản PDF 172 trang trên Windows
+
+Clone/pull repository:
 
 ```bash
 git clone https://github.com/Vietflexmap/atlas.git
 cd atlas
 ```
 
-Sau đó double-click:
+Cách nhanh nhất: **kéo file PDF 172 trang và thả trực tiếp lên**:
 
 ```text
-BUILD_ATLAS_WINDOWS.bat
+PUBLISH_PDF_WINDOWS.bat
 ```
 
-Công cụ tự động:
+Tool sẽ:
 
-1. Cài/kiểm tra `selenium`, `pillow`, `img2pdf`, `requests`.
-2. Mở Chrome vào viewer gốc.
-3. Lấy lần lượt `1.jpg → 172.jpg` từ cùng origin/session Chrome.
-4. Kiểm tra định dạng và kích thước từng ảnh.
-5. Ghi `pages/manifest.json` kèm SHA-256.
-6. Tạo `Atlas_Vietnam_1996.pdf`.
-7. Nếu PDF vượt giới hạn file thông thường của GitHub, tự tối ưu chất lượng cao.
-8. `git add`, commit, pull --rebase và push lên `main`.
-9. GitHub Pages tự deploy lại.
+1. Kiểm tra PDF bằng `pypdf`.
+2. Bắt buộc đúng **172 trang**.
+3. Đổi/copy thành `Atlas_Vietnam_1996.pdf`.
+4. `git add` + commit + pull --rebase + push lên `main`.
+5. GitHub Pages tự deploy lại Flipbook.
 
-**Không đóng cửa sổ Chrome tự động** trong lúc công cụ đang lấy 172 trang.
+Có thể chạy bằng Python:
 
-## Kết quả sau số hóa
-
-```text
-atlas/
-├── Atlas_Vietnam_1996.pdf
-├── pages/
-│   ├── 1.jpg
-│   ├── 2.jpg
-│   ├── ...
-│   ├── 172.jpg
-│   └── manifest.json
-├── index.html
-├── style.css
-├── app.js
-├── BUILD_ATLAS_WINDOWS.bat
-├── scripts/
-│   ├── build_atlas_windows.py
-│   ├── build_atlas_assets.py
-│   └── download_pages.py
-└── .github/workflows/pages.yml
-```
-
-Sau khi assets được push, website mặc định sử dụng `?source=local`. Có thể ép chế độ đối chiếu nguồn bằng:
-
-```text
-?source=remote
+```bash
+pip install pypdf
+python scripts/publish_local_pdf.py "D:\\Atlas.pdf" --push
 ```
 
 ## Website
@@ -109,9 +104,7 @@ Sau khi assets được push, website mặc định sử dụng `?source=local`.
 https://vietflexmap.github.io/atlas/
 ```
 
-Workflow deploy nằm tại `.github/workflows/pages.yml`.
-
-## Chạy local để kiểm thử giao diện
+## Chạy local
 
 ```bash
 python -m http.server 8000
@@ -123,22 +116,12 @@ Mở:
 http://localhost:8000/
 ```
 
-Không nên mở `index.html` trực tiếp bằng `file://`.
+Không mở bằng `file://` vì PDF.js cần được phục vụ qua HTTP/HTTPS.
 
-## Phím tắt
+## Lưu ý hiệu năng
 
-| Phím | Chức năng |
-|---|---|
-| `←` / `PageUp` | Trang trước |
-| `→` / `PageDown` / `Space` | Trang sau |
-| `Home` | Trang 1 |
-| `End` | Trang 172 |
-| `F` | Fullscreen |
-| `M` | Focus Mode |
-| `Esc` | Đóng drawer / thoát Focus Mode |
-| `+` / `-` | Zoom |
-| `0` | Zoom 100% |
+PDF 172 trang không được render toàn bộ ngay khi mở. Ứng dụng chỉ render trang hiện tại và một số trang lân cận; thumbnail cũng được render theo viewport của drawer. Cách này giúp Flipbook hoạt động ổn định hơn trên điện thoại và tablet có RAM thấp.
 
 ## Nguồn và quyền sử dụng
 
-Nguồn scan trực tuyến được dùng làm đầu vào số hóa từ viewer công khai tại `bandovn.vn/onlinescan/atlasvietnam/`. Dòng nhận diện trên giao diện là **“Nguồn: Vietflexmap số hóa”**. Quyền đối với nội dung Atlas/ấn phẩm gốc vẫn thuộc chủ sở hữu và đơn vị phát hành tương ứng; việc công bố, sao lưu và phân phối cần bảo đảm quyền sử dụng phù hợp.
+Dòng nhận diện trên sản phẩm là **“Nguồn: Vietflexmap số hóa”**. Quyền đối với nội dung Atlas/ấn phẩm gốc vẫn thuộc chủ sở hữu và đơn vị phát hành tương ứng; việc công bố, sao lưu và phân phối cần bảo đảm quyền sử dụng phù hợp.
