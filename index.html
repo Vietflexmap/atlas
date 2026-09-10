@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Atlas Việt Nam 1996 - trình đọc sách bản đồ dạng HTML5 Flipbook.">
+  <title>Atlas Việt Nam 1996 | Vietflexmap</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://www.bandovn.vn">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">VN</div>
+        <div>
+          <h1>Atlas Việt Nam 1996</h1>
+          <p>HTML5 Flipbook · Vietflexmap</p>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button class="icon-btn" id="toggleThumbsBtn" type="button" title="Mục lục ảnh">☰</button>
+        <button class="icon-btn" id="fullscreenBtn" type="button" title="Toàn màn hình">⛶</button>
+      </div>
+    </header>
+
+    <main class="reader-layout">
+      <aside class="sidebar" id="sidebar" aria-label="Danh sách trang">
+        <div class="sidebar-head">
+          <strong>Trang Atlas</strong>
+          <span id="sidebarCount">172 trang</span>
+        </div>
+        <div class="thumb-grid" id="thumbGrid"></div>
+      </aside>
+
+      <section class="reader-stage" id="readerStage">
+        <div class="status-card" id="loadingState">
+          <div class="spinner"></div>
+          <strong>Đang mở Atlas…</strong>
+          <span>Đang chuẩn bị 172 trang ảnh.</span>
+        </div>
+
+        <div class="book-wrap" id="bookWrap" hidden>
+          <div id="book" aria-label="Atlas Việt Nam dạng sách lật"></div>
+        </div>
+
+        <div class="fallback-reader" id="fallbackReader" hidden>
+          <img id="fallbackImage" alt="Trang Atlas">
+        </div>
+      </section>
+    </main>
+
+    <footer class="toolbar" aria-label="Điều khiển sách">
+      <button class="tool-btn" id="firstBtn" type="button" title="Trang đầu">⏮</button>
+      <button class="tool-btn primary" id="prevBtn" type="button" title="Trang trước">‹</button>
+
+      <div class="page-control">
+        <label for="pageInput">Trang</label>
+        <input id="pageInput" type="number" min="1" max="172" value="1" inputmode="numeric">
+        <span>/ <b id="pageTotal">172</b></span>
+      </div>
+
+      <button class="tool-btn primary" id="nextBtn" type="button" title="Trang sau">›</button>
+      <button class="tool-btn" id="lastBtn" type="button" title="Trang cuối">⏭</button>
+
+      <div class="divider"></div>
+      <button class="tool-btn" id="zoomOutBtn" type="button" title="Thu nhỏ">−</button>
+      <span class="zoom-label" id="zoomLabel">100%</span>
+      <button class="tool-btn" id="zoomInBtn" type="button" title="Phóng to">+</button>
+      <button class="tool-btn" id="resetZoomBtn" type="button" title="Về 100%">1:1</button>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
