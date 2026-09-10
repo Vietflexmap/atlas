@@ -1,19 +1,27 @@
 # Atlas Việt Nam 1996 — HTML5 Flipbook
 
-Trình đọc Atlas dạng sách lật chạy thuần HTML/CSS/JavaScript và có thể xuất bản trực tiếp bằng GitHub Pages.
+Trình đọc Atlas dạng **quyển sách số** chạy thuần HTML/CSS/JavaScript, tối ưu cho desktop, tablet và điện thoại, xuất bản trực tiếp bằng GitHub Pages.
 
-## Tính năng
+> **Nguồn hiển thị trên sản phẩm: Vietflexmap số hóa.**
 
-- 172 trang Atlas, nguồn ảnh theo viewer công khai tại `bandovn.vn/onlinescan/atlasvietnam/`.
+## Trải nghiệm đọc
+
+- 172 trang Atlas theo cấu trúc ảnh của viewer gốc.
 - Hiệu ứng lật trang HTML5 bằng [StPageFlip](https://github.com/Nodlik/StPageFlip).
-- Responsive desktop/mobile, tự chuyển portrait/landscape.
-- Thumbnail 172 trang, nhảy tới trang bất kỳ.
-- Trang đầu/cuối, trước/sau, phím ← →, Home/End, Space.
-- Fullscreen và zoom 60–180%.
-- URL nhớ trang hiện tại qua `#page=...` để chia sẻ thẳng một trang.
-- Fallback đọc ảnh đơn trang nếu thư viện Flipbook CDN không tải được.
-- Hai chế độ dữ liệu: ảnh nguồn trực tiếp và ảnh lưu local trong repository.
-- GitHub Actions tự deploy mỗi khi cập nhật nhánh `main`.
+- Book-first UI: trang sách luôn là trung tâm, giao diện điều khiển tối giản.
+- Responsive theo desktop, tablet, điện thoại dọc và điện thoại ngang.
+- Drawer thumbnail 172 trang không làm co vùng sách.
+- Thanh tiến độ 1–172 để kéo nhanh đến vị trí mong muốn.
+- Trang đầu/cuối, trước/sau, nhập trực tiếp số trang và vùng bấm mép sách.
+- Fullscreen, zoom và Focus Mode để đọc không bị phân tán.
+- Ghi nhớ trang đọc gần nhất bằng `localStorage`.
+- URL `#page=...` để chia sẻ đúng một trang Atlas.
+- Phím tắt desktop và hỗ trợ thao tác cảm ứng.
+- Fallback đọc đơn trang nếu thư viện Flipbook CDN không tải được.
+- Hai chế độ nguồn: ảnh trực tuyến và ảnh lưu local trong repository.
+- Tự chuyển về nguồn trực tuyến nếu yêu cầu `?source=local` nhưng chưa có ảnh local.
+- Hỗ trợ `prefers-reduced-motion` và trạng thái focus/ARIA cơ bản.
+- GitHub Actions tự deploy khi cập nhật nhánh `main`.
 
 ## Chạy ngay
 
@@ -25,11 +33,11 @@ python -m http.server 8000
 
 Mở `http://localhost:8000`.
 
-> Không nên mở `index.html` bằng `file://` khi kiểm thử; hãy dùng một HTTP server cục bộ.
+> Không nên mở `index.html` bằng `file://` khi kiểm thử; hãy dùng HTTP server cục bộ.
 
 ## Nguồn ảnh
 
-Mặc định website dựng URL theo quy tắc:
+Website hiện dựng URL ảnh theo quy tắc:
 
 ```text
 https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile/1.jpg
@@ -42,6 +50,12 @@ Cấu hình nằm ở đầu `app.js`:
 ```js
 const TOTAL_PAGES = 172;
 const REMOTE_BASE = 'https://www.bandovn.vn/onlinescan/atlasvietnam/files/mobile';
+```
+
+Dòng credit giao diện được đặt thống nhất là:
+
+```text
+Nguồn: Vietflexmap số hóa
 ```
 
 ## Lưu toàn bộ ảnh vào repository
@@ -81,21 +95,15 @@ Ví dụ:
 https://vietflexmap.github.io/atlas/?source=local#page=50
 ```
 
-## Bật GitHub Pages lần đầu
+## GitHub Pages
 
-Workflow `.github/workflows/pages.yml` đã có sẵn. Chỉ cần cấu hình Pages một lần:
-
-1. Vào **Settings → Pages** của repository.
-2. Trong **Build and deployment → Source**, chọn **GitHub Actions**.
-3. Mở tab **Actions** và chạy lại workflow **Deploy Atlas to GitHub Pages** nếu lần chạy đầu tiên xảy ra trước khi Pages được bật.
-
-Sau đó mỗi lần push lên `main` website sẽ tự deploy.
-
-Địa chỉ dự kiến:
+Workflow `.github/workflows/pages.yml` đã có sẵn. Website được triển khai tại:
 
 ```text
 https://vietflexmap.github.io/atlas/
 ```
+
+Nếu Pages chưa được kích hoạt, vào **Settings → Pages → Build and deployment → Source → GitHub Actions**.
 
 ## Cấu trúc
 
@@ -122,9 +130,11 @@ atlas/
 | `Home` | Trang 1 |
 | `End` | Trang 172 |
 | `F` | Fullscreen |
+| `M` | Focus Mode |
+| `Esc` | Đóng drawer / thoát Focus Mode |
 | `+` / `-` | Zoom |
 | `0` | Zoom 100% |
 
 ## Ghi chú dữ liệu
 
-Website hiện chỉ là trình đọc/hiển thị lại dữ liệu ảnh. Quyền đối với nội dung Atlas và ảnh nguồn thuộc về chủ sở hữu/đơn vị phát hành tương ứng; khi triển khai công khai hoặc sao lưu lâu dài cần bảo đảm quyền sử dụng phù hợp.
+Website là trình đọc và giao diện số hóa/hiển thị lại dữ liệu ảnh Atlas. Quyền đối với nội dung Atlas và ảnh nguồn thuộc về chủ sở hữu/đơn vị phát hành tương ứng; khi triển khai công khai hoặc sao lưu lâu dài cần bảo đảm quyền sử dụng phù hợp.
