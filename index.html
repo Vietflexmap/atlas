@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#12100d">
   <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
   <meta name="description" content="Atlas Việt Nam 1996 - Flipbook HTML5 172 trang. Nguồn: Vietflexmap số hóa.">
   <title>Atlas Việt Nam 1996 | Vietflexmap số hóa</title>
   <link rel="stylesheet" href="style.css">
@@ -23,7 +24,7 @@
       </div>
 
       <div class="top-actions">
-        <a class="icon-btn link-btn" id="downloadPdf" href="Atlas_Vietnam_1996.pdf" download="Atlas_Vietnam_1996.pdf" title="Tải PDF" aria-label="Tải PDF">↓</a>
+        <a class="icon-btn link-btn" id="downloadPdf" href="Atlas_Vietnam_1996.pdf" download="Atlas_Vietnam_1996.pdf" title="Tải PDF" aria-label="Tải PDF" hidden>↓</a>
         <button class="icon-btn" id="focusBtn" type="button" title="Chế độ tập trung" aria-label="Chế độ tập trung">◉</button>
         <button class="icon-btn" id="fullscreenBtn" type="button" title="Toàn màn hình" aria-label="Toàn màn hình">⛶</button>
       </div>
@@ -49,7 +50,7 @@
         <div class="loading-card" id="loadingCard" role="status" aria-live="polite">
           <div class="spinner" aria-hidden="true"></div>
           <strong id="loadingTitle">Đang mở Atlas…</strong>
-          <span id="loadingText">Đang nạp PDF và chuẩn bị 172 trang.</span>
+          <span id="loadingText">Đang tìm PDF local và chuẩn bị Flipbook 172 trang.</span>
           <div class="loading-progress"><i id="loadingBar"></i></div>
         </div>
 
